@@ -1,0 +1,12 @@
+2026-10-20T10:01:02.1000000Z ##[group]Run actions/setup-node@v4
+2026-10-20T10:01:03.2000000Z ##[endgroup]
+2026-10-20T10:01:05.0000000Z ##[group]Run npm ci
+2026-10-20T10:01:05.0100000Z npm ci
+2026-10-20T10:01:05.0200000Z ##[endgroup]
+2026-10-20T10:01:07.4000000Z npm error code EUSAGE
+2026-10-20T10:01:07.4010000Z npm error
+2026-10-20T10:01:07.4020000Z npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+2026-10-20T10:01:07.4030000Z npm error
+2026-10-20T10:01:07.4040000Z npm error Missing: zod@4.6.7 from lock file
+2026-10-20T10:01:07.5000000Z npm error A complete log of this run can be found in: /home/runner/.npm/_logs/2026-10-20T10_01_05_000Z-debug-0.log
+2026-10-20T10:01:07.6000000Z ##[error]Process completed with exit code 1.

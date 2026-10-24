@@ -1,0 +1,7 @@
+2026-10-20T17:00:00.0000000Z ##[group]Run pytest -q
+2026-10-20T17:00:00.0100000Z ##[endgroup]
+2026-10-20T17:00:02.0000000Z ImportError while loading conftest '/home/runner/work/app/tests/conftest.py'.
+2026-10-20T17:00:02.0100000Z tests/conftest.py:3: in <module>
+2026-10-20T17:00:02.0200000Z     import httpx
+2026-10-20T17:00:02.0300000Z E   ModuleNotFoundError: No module named 'httpx'
+2026-10-20T17:00:02.2000000Z ##[error]Process completed with exit code 4.

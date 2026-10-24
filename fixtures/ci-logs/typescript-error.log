@@ -1,0 +1,7 @@
+2026-10-20T11:00:00.0000000Z ##[group]Run npm run typecheck
+2026-10-20T11:00:00.0100000Z ##[endgroup]
+2026-10-20T11:00:01.0000000Z > app@1.0.0 typecheck
+2026-10-20T11:00:01.0100000Z > tsc --noEmit
+2026-10-20T11:00:06.2000000Z src/routes/users.ts(42,17): error TS2339: Property 'emial' does not exist on type 'User'.
+2026-10-20T11:00:06.2100000Z src/routes/users.ts(57,3): error TS2322: Type 'string' is not assignable to type 'number'.
+2026-10-20T11:00:06.3000000Z ##[error]Process completed with exit code 2.

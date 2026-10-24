@@ -1,0 +1,47 @@
+# Dependencies & caches
+node_modules/
+.cache/
+*.tsbuildinfo
+
+# Build output
+dist/
+apps/desktop/release/
+apps/desktop/build-server/
+
+# Runtime data (SQLite DB, setup token, logs) — never commit
+data/
+*.db
+*.db-wal
+*.db-shm
+setup-token.txt
+logs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Test output
+test-results/
+playwright-report/
+coverage/
+
+# Large recordings stay local
+artifacts/**/*.mp4
+artifacts/**/*.webm
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

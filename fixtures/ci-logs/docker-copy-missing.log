@@ -1,0 +1,8 @@
+2026-10-20T13:00:00.0000000Z ##[group]Run docker build -t app:ci .
+2026-10-20T13:00:00.0100000Z ##[endgroup]
+2026-10-20T13:00:02.0000000Z #7 [build 3/6] COPY package*.json ./
+2026-10-20T13:00:02.1000000Z #7 DONE 0.1s
+2026-10-20T13:00:02.2000000Z #8 [build 4/6] COPY config/production.json ./config/
+2026-10-20T13:00:02.3000000Z #8 ERROR: failed to calculate checksum of ref 1a2b: "/config/production.json": not found
+2026-10-20T13:00:02.4000000Z ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref 1a2b: "/config/production.json": not found
+2026-10-20T13:00:02.5000000Z ##[error]Process completed with exit code 1.

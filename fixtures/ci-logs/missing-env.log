@@ -1,0 +1,6 @@
+2026-10-20T14:00:00.0000000Z ##[group]Run npm run build
+2026-10-20T14:00:00.0100000Z ##[endgroup]
+2026-10-20T14:00:03.0000000Z > web@1.0.0 build
+2026-10-20T14:00:04.0000000Z Error: Missing required environment variable: DATABASE_URL
+2026-10-20T14:00:04.0100000Z     at loadConfig (src/config.ts:12:11)
+2026-10-20T14:00:04.2000000Z ##[error]Process completed with exit code 1.

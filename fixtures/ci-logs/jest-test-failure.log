@@ -1,0 +1,12 @@
+2026-10-20T12:00:00.0000000Z ##[group]Run npm test
+2026-10-20T12:00:00.0100000Z ##[endgroup]
+2026-10-20T12:00:04.0000000Z  PASS  src/utils/format.test.ts
+2026-10-20T12:00:05.0000000Z  FAIL  src/cart/total.test.ts
+2026-10-20T12:00:05.0100000Z   ● cart total › applies discount before tax
+2026-10-20T12:00:05.0200000Z     expect(received).toBe(expected) // Object.is equality
+2026-10-20T12:00:05.0300000Z     Expected: 90
+2026-10-20T12:00:05.0400000Z     Received: 99
+2026-10-20T12:00:05.0500000Z       at Object.<anonymous> (src/cart/total.test.ts:18:27)
+2026-10-20T12:00:06.0000000Z Tests:       1 failed, 41 passed, 42 total
+2026-10-20T12:00:06.1000000Z npm error Lifecycle script `test` failed with error:
+2026-10-20T12:00:06.2000000Z ##[error]Process completed with exit code 1.

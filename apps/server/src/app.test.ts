@@ -1,0 +1,237 @@
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildApp } from './app.ts';
+import { loadConfig } from './config.ts';
+import type { AppContext } from './context.ts';
+
+const PASSWORD = 'correct-horse-battery-staple-42';
+
+let app: FastifyInstance;
+let ctx: AppContext;
+let setupToken: string;
+let dataDir: string;
+
+beforeAll(async () => {
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-test-'));
+  const built = await buildApp(loadConfig({ dataDir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: null, githubToken: null, authRateLimitPerMin: 1000 }));
+  app = built.app;
+  ctx = built.ctx;
+  setupToken = built.setup!.token;
+});
+afterAll(async () => {
+  await app.close();
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+function cookieFrom(res: { headers: Record<string, unknown> }): string {
+  const raw = res.headers['set-cookie'];
+  const first = Array.isArray(raw) ? raw[0] : String(raw);
+  return first.split(';')[0]!;
+}
+
+async function login(username: string, password = PASSWORD) {
+  const res = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username, password } });
+  return { res, cookie: res.statusCode === 200 ? cookieFrom(res) : '', csrf: res.json().csrfToken as string };
+}
+
+describe('first-run setup', () => {
+  it('requires setup and writes the token file', async () => {
+    const res = await app.inject('/api/auth/status');
+    expect(res.json().setupRequired).toBe(true);
+    expect(fs.readFileSync(path.join(dataDir, 'setup-token.txt'), 'utf8').trim()).toBe(setupToken);
+  });
+
+  it('rejects a wrong setup token', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: 'x'.repeat(32), username: 'mohamedwaseem', password: PASSWORD } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('rejects weak passwords', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: setupToken, username: 'mohamedwaseem', password: 'short' } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('creates the administrator once, then removes the token', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: setupToken, username: 'mohamedwaseem', password: PASSWORD } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toMatchObject({ username: 'mohamedwaseem', role: 'admin' });
+    const cookie = String(res.headers['set-cookie']);
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/SameSite=Strict/i);
+    expect(fs.existsSync(path.join(dataDir, 'setup-token.txt'))).toBe(false);
+    const again = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: setupToken, username: 'other', password: PASSWORD } });
+    expect(again.statusCode).toBe(409);
+  });
+
+  it('never stores the password in plain text', () => {
+    const row = ctx.db.prepare('SELECT password_hash FROM users').get() as { password_hash: string };
+    expect(row.password_hash.startsWith('scrypt$')).toBe(true);
+    expect(row.password_hash).not.toContain(PASSWORD);
+  });
+});
+
+describe('authentication and authorisation', () => {
+  it('blocks every private endpoint without a session', async () => {
+    for (const url of ['/api/overview', '/api/repositories', '/api/findings', '/api/monitors', '/api/incidents', '/api/analytics', '/api/settings', '/api/audit', '/api/events/stream']) {
+      expect((await app.inject(url)).statusCode, url).toBe(401);
+    }
+    expect((await app.inject('/api/health')).statusCode).toBe(200);
+  });
+
+  it('rejects a forged session cookie', async () => {
+    expect((await app.inject({ url: '/api/overview', headers: { cookie: 'so_session=forged' } })).statusCode).toBe(401);
+  });
+
+  it('logs in and reads private data', async () => {
+    const { res, cookie } = await login('mohamedwaseem');
+    expect(res.statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/overview', headers: { cookie } })).statusCode).toBe(200);
+  });
+
+  it('requires a CSRF token for mutations', async () => {
+    const { cookie, csrf } = await login('mohamedwaseem');
+    const body = { name: 'x', url: 'http://127.0.0.1:9/', intervalS: 300 };
+    expect((await app.inject({ method: 'POST', url: '/api/monitors', headers: { cookie }, payload: body })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/api/monitors', headers: { cookie, 'x-csrf-token': 'wrong' }, payload: body })).statusCode).toBe(403);
+    const ok = await app.inject({ method: 'POST', url: '/api/monitors', headers: { cookie, 'x-csrf-token': csrf }, payload: body });
+    expect(ok.statusCode).toBe(200);
+    await app.inject({ method: 'DELETE', url: `/api/monitors/${ok.json().id}`, headers: { cookie, 'x-csrf-token': csrf } });
+  });
+
+  it('gives invited viewers read-only access', async () => {
+    const admin = await login('mohamedwaseem');
+    const invite = await app.inject({ method: 'POST', url: '/api/users/invites', headers: { cookie: admin.cookie, 'x-csrf-token': admin.csrf }, payload: { role: 'viewer' } });
+    const accepted = await app.inject({ method: 'POST', url: '/api/auth/accept-invite', payload: { token: invite.json().token, username: 'reviewer', password: PASSWORD } });
+    expect(accepted.statusCode).toBe(200);
+    const reuse = await app.inject({ method: 'POST', url: '/api/auth/accept-invite', payload: { token: invite.json().token, username: 'reviewer2', password: PASSWORD } });
+    expect(reuse.statusCode).toBe(403);
+
+    const viewer = await login('reviewer');
+    expect((await app.inject({ url: '/api/overview', headers: { cookie: viewer.cookie } })).statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/audit', headers: { cookie: viewer.cookie } })).statusCode).toBe(403);
+    const write = await app.inject({ method: 'POST', url: '/api/monitors', headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf }, payload: { name: 'x', url: 'http://127.0.0.1:9/' } });
+    expect(write.statusCode).toBe(403);
+    // Any role may log out.
+    expect((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: { cookie: viewer.cookie, 'x-csrf-token': viewer.csrf } })).statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/overview', headers: { cookie: viewer.cookie } })).statusCode).toBe(401);
+  });
+
+  it('locks an account after repeated failures, with a generic message', async () => {
+    const unknown = await login('nobody', 'wrong-password-123');
+    expect(unknown.res.statusCode).toBe(401);
+    for (let i = 0; i < 5; i++) {
+      const r = await login('reviewer', 'wrong-password-123');
+      expect(r.res.json().message).toBe('Invalid username or password.');
+    }
+    const locked = await login('reviewer');
+    expect(locked.res.statusCode).toBe(429);
+  });
+
+  it('revokes other sessions when the password changes', async () => {
+    const a = await login('mohamedwaseem');
+    const b = await login('mohamedwaseem');
+    const newPassword = 'another-long-passphrase-77';
+    const res = await app.inject({ method: 'POST', url: '/api/auth/password', headers: { cookie: a.cookie, 'x-csrf-token': a.csrf }, payload: { currentPassword: PASSWORD, newPassword } });
+    expect(res.statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/overview', headers: { cookie: b.cookie } })).statusCode).toBe(401);
+    expect((await app.inject({ url: '/api/overview', headers: { cookie: a.cookie } })).statusCode).toBe(200);
+    await app.inject({ method: 'POST', url: '/api/auth/password', headers: { cookie: a.cookie, 'x-csrf-token': a.csrf }, payload: { currentPassword: newPassword, newPassword: PASSWORD } });
+  });
+
+  it('records security events in the audit log without secrets', () => {
+    const rows = ctx.db.prepare('SELECT action, detail FROM audit_log').all() as { action: string; detail: string | null }[];
+    expect(rows.map((r) => r.action)).toEqual(expect.arrayContaining(['auth.setup', 'auth.login', 'auth.login_failed', 'auth.password_changed', 'users.invite_created']));
+    expect(JSON.stringify(rows)).not.toContain(PASSWORD);
+  });
+});
+
+describe('monitoring, incidents and recovery verification', () => {
+  let target: http.Server;
+  let healthy = true;
+  let url: string;
+
+  beforeAll(async () => {
+    target = http.createServer((_req, res) => {
+      res.statusCode = healthy ? 200 : 503;
+      res.end(healthy ? 'ok' : 'down');
+    });
+    await new Promise<void>((r) => target.listen(0, '127.0.0.1', r));
+    url = `http://127.0.0.1:${(target.address() as AddressInfo).port}/health`;
+  });
+  afterAll(() => new Promise<void>((r) => target.close(() => r())));
+
+  it('opens an incident after the failure threshold and resolves it on recovery', async () => {
+    const { cookie, csrf } = await login('mohamedwaseem');
+    const headers = { cookie, 'x-csrf-token': csrf };
+    const created = await app.inject({ method: 'POST', url: '/api/monitors', headers, payload: { name: 'Test API', url, intervalS: 60, retries: 0, failureThreshold: 2 } });
+    const id = created.json().id as number;
+    await new Promise((r) => setTimeout(r, 300)); // initial check fired on creation
+
+    healthy = false;
+    const m = () => ctx.db.prepare('SELECT * FROM monitors WHERE id = ?').get(id) as never;
+    expect((await ctx.scheduler.check(m(), true)).ok).toBe(false);
+    let open = ctx.db.prepare("SELECT * FROM incidents WHERE monitor_id = ? AND status != 'resolved'").all(id);
+    expect(open).toHaveLength(0); // below threshold
+    await ctx.scheduler.check(m(), true);
+    open = ctx.db.prepare("SELECT * FROM incidents WHERE monitor_id = ? AND status != 'resolved'").all(id);
+    expect(open).toHaveLength(1);
+    const incidentId = (open[0] as { id: number }).id;
+
+    // Manual resolve is refused while the service is still failing.
+    const refused = await app.inject({ method: 'POST', url: `/api/incidents/${incidentId}/resolve`, headers, payload: { resolution: 'restarted' } });
+    expect(refused.statusCode).toBe(409);
+
+    healthy = true;
+    expect((await ctx.scheduler.check(m(), true)).ok).toBe(true);
+    const inc = ctx.db.prepare('SELECT status, started_at, detected_at, resolved_at FROM incidents WHERE id = ?').get(incidentId) as { status: string; started_at: string; detected_at: string; resolved_at: string };
+    expect(inc.status).toBe('resolved');
+    expect(inc.started_at <= inc.detected_at).toBe(true);
+    expect(inc.resolved_at).toBeTruthy();
+  });
+
+  it('computes a health score only from inputs that have data', async () => {
+    const { cookie } = await login('mohamedwaseem');
+    const res = await app.inject({ url: '/api/health-score', headers: { cookie } });
+    const h = res.json().health;
+    const ci = h.components.find((c: { key: string }) => c.key === 'ci');
+    expect(ci.score).toBeNull(); // no workflow runs → unknown, not "healthy"
+    expect(h.partial).toBe(true);
+    expect(h.coverage).toBeLessThan(1);
+  });
+
+  it('enforces load-test target authorisation and caps', async () => {
+    const { cookie, csrf } = await login('mohamedwaseem');
+    const headers = { cookie, 'x-csrf-token': csrf };
+    const remote = await app.inject({ method: 'POST', url: '/api/load-tests', headers, payload: { url: 'https://example.com/', vus: 5, durationS: 10 } });
+    expect(remote.statusCode).toBe(400);
+    expect(remote.json().message).toMatch(/monitors/);
+    const tooMany = await app.inject({ method: 'POST', url: '/api/load-tests', headers, payload: { url, vus: 500, durationS: 10 } });
+    expect(tooMany.statusCode).toBe(400);
+  });
+
+  it('escapes formula-like cells in CSV exports', async () => {
+    ctx.incidents.open({ source: 'manual', ref: 'csv-test', title: '=HYPERLINK("http://evil")', severity: 'low' });
+    const { cookie } = await login('mohamedwaseem');
+    const res = await app.inject({ url: '/api/analytics/export.csv?dataset=incidents', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain(`"'=HYPERLINK(""http://evil"")"`);
+  });
+});
+
+describe('login rate limiting', () => {
+  it('throttles repeated login attempts per IP', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-rl-'));
+    const built = await buildApp(loadConfig({ dataDir: dir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: null, githubToken: null, authRateLimitPerMin: 10 }));
+    const codes: number[] = [];
+    for (let i = 0; i < 12; i++) codes.push((await built.app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'x', password: 'y' } })).statusCode);
+    expect(codes.slice(0, 10).every((c) => c === 401)).toBe(true);
+    expect(codes.slice(10)).toEqual([429, 429]);
+    await built.app.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

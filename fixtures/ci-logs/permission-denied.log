@@ -1,0 +1,4 @@
+2026-10-20T16:00:00.0000000Z ##[group]Run gh release create v1.2.0
+2026-10-20T16:00:00.0100000Z ##[endgroup]
+2026-10-20T16:00:01.0000000Z HTTP 403: Resource not accessible by integration (https://api.github.com/repos/acme/app/releases)
+2026-10-20T16:00:01.1000000Z ##[error]Process completed with exit code 1.
