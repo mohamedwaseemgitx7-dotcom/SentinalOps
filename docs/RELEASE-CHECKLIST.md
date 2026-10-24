@@ -12,8 +12,8 @@
 | Desktop exe launches | ✅ dev, packaged, portable | `artifacts/screenshots/desktop-*.png` |
 | Defender scan of binaries | ✅ no threats | MpCmdRun |
 | Code signing | ❌ not signed (no certificate; ₹0) | documented |
-| LICENSE | ⏳ owner to choose | — |
-| Cloud deployment | ⏳ not approved / not created | COST-AND-QUOTAS.md |
+| LICENSE | ✅ MIT | `LICENSE` |
+| Cloud deployment | ⛔ owner chose local-first | DECISIONS.md ADR-009 |
 | CI on GitHub | ⏳ runs after the repository is published | `.github/workflows/ci.yml` |
 
 ## Artifacts (built 2026-10-25, unsigned)

@@ -24,8 +24,11 @@
 ## ADR-008 Server-Sent Events instead of polling (2026-10-24)
 **Decision:** One SSE stream per tab carries activity events and cache-invalidation topics; pages refetch only what changed (debounced). Load tests poll every 2 s only while one is running.
 
-## ADR-009 No hosted deployment yet (2026-10-25)
-**Decision:** Do not create cloud resources. Free tiers either lose the SQLite file (Render), stop on daily CPU quota (Azure F1), or are time-limited credits (AWS). Awaiting owner decision — see COST-AND-QUOTAS.md.
+## ADR-009 Local-first, no hosted deployment (2026-10-25)
+**Decision (owner):** Stay local. Free tiers either lose the SQLite file (Render), stop on daily CPU quota (Azure F1), or are time-limited credits (AWS) — see COST-AND-QUOTAS.md. Revisit if remote access becomes necessary.
+
+## ADR-011 Public repository, MIT license (2026-10-25)
+**Decision (owner):** Publish `dmonitz` publicly under MIT. Live-test screenshots that show service names stay out of git (`artifacts/screenshots/live/`).
 
 ## ADR-010 Windows paths
 Project lives in `D:\dmonitz` (the folder Claude Code was launched in) rather than `D:\Projects\dmonitz`, which did not exist; all caches (npm, Electron, electron-builder) are redirected to `D:\dmonitz\.cache`.

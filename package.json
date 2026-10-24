@@ -23,5 +23,6 @@
   "devDependencies": {
     "@playwright/test": "1.64.0",
     "concurrently": "10.0.6"
-  }
+  },
+  "license": "MIT"
 }

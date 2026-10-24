@@ -40,7 +40,7 @@ Release is blocked on: any open **critical/high** finding in SentinelOps' own re
 
 - Unit/API/security tests: 52 passed. E2E: 7 passed (desktop + mobile).
 - `npm audit`: 0 vulnerabilities after upgrading Electron 44.9.3, Fastify 5.12.7, Zod 4.6.7.
-- Self-analysis with SentinelOps: found 3 scanner false positives (fixed with regression tests) and true hygiene gaps (README, SECURITY, CI, Dependabot — added; LICENSE pending owner decision).
+- Self-analysis with SentinelOps: found 3 scanner false positives (fixed with regression tests) and true hygiene gaps (README, SECURITY, CI, Dependabot, LICENSE — all added).
 - Windows Defender on-demand scan of installer, portable exe and app exe: no threats. Binaries are **not signed**.
 - Not run (not installed): Gitleaks, Trivy, Semgrep locally. Gitleaks runs in CI.
 

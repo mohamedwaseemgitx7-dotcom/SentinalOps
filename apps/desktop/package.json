@@ -61,5 +61,6 @@
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"
     }
-  }
+  },
+  "license": "MIT"
 }
