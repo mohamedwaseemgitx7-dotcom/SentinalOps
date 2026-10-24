@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -9,7 +10,8 @@ import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import type { AppContext } from './context.ts';
 
-const PASSWORD = 'correct-horse-battery-staple-42';
+// Generated per run so no credential-like literal lives in the repository.
+const PASSWORD = `pw-${crypto.randomUUID()}`;
 
 let app: FastifyInstance;
 let ctx: AppContext;
@@ -135,7 +137,7 @@ describe('authentication and authorisation', () => {
   it('revokes other sessions when the password changes', async () => {
     const a = await login('mohamedwaseem');
     const b = await login('mohamedwaseem');
-    const newPassword = 'another-long-passphrase-77';
+    const newPassword = `pw-${crypto.randomUUID()}`;
     const res = await app.inject({ method: 'POST', url: '/api/auth/password', headers: { cookie: a.cookie, 'x-csrf-token': a.csrf }, payload: { currentPassword: PASSWORD, newPassword } });
     expect(res.statusCode).toBe(200);
     expect((await app.inject({ url: '/api/overview', headers: { cookie: b.cookie } })).statusCode).toBe(401);
@@ -170,7 +172,13 @@ describe('monitoring, incidents and recovery verification', () => {
     const headers = { cookie, 'x-csrf-token': csrf };
     const created = await app.inject({ method: 'POST', url: '/api/monitors', headers, payload: { name: 'Test API', url, intervalS: 60, retries: 0, failureThreshold: 2 } });
     const id = created.json().id as number;
-    await new Promise((r) => setTimeout(r, 300)); // initial check fired on creation
+    // Creation fires an initial check in the background; wait for it rather than a fixed delay (CI is slower).
+    for (let i = 0; i < 100; i++) {
+      const row = ctx.db.prepare('SELECT last_checked_at FROM monitors WHERE id = ?').get(id) as { last_checked_at: string | null };
+      if (row.last_checked_at) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await new Promise((r) => setTimeout(r, 100)); // let the check release its in-flight slot
 
     healthy = false;
     const m = () => ctx.db.prepare('SELECT * FROM monitors WHERE id = ?').get(id) as never;
