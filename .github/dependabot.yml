@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Match the project policy: only versions published at least 14 days ago
+    # (security updates are not delayed by cooldown).
+    cooldown:
+      default-days: 14
+    ignore:
+      # Type definitions must match the Node.js runtime major (24).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
@@ -12,3 +20,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
