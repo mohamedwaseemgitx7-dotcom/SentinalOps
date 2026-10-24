@@ -1,0 +1,12 @@
+2026-10-19T01:52:08.7063949Z Complete job name: ping
+2026-10-19T01:52:08.7904409Z ##[group]Run curl --fail --silent --show-error --max-time 90 --retry 3 --retry-delay 20 --retry-all-errors \
+2026-10-19T01:52:08.7906050Z [36;1mcurl --fail --silent --show-error --max-time 90 --retry 3 --retry-delay 20 --retry-all-errors \[0m
+2026-10-19T01:52:08.7907250Z [36;1m  https://farmerassist-api.onrender.com/api/health/ready[0m
+2026-10-19T01:52:08.9021509Z shell: /usr/bin/bash -e {0}
+2026-10-19T01:52:08.9022888Z ##[endgroup]
+2026-10-19T01:52:09.1977439Z curl: (22) The requested URL returned error: 502
+2026-10-19T01:52:29.7796269Z curl: (22) The requested URL returned error: 502
+2026-10-19T01:52:50.0079370Z curl: (22) The requested URL returned error: 502
+2026-10-19T01:53:10.2370446Z curl: (22) The requested URL returned error: 502
+2026-10-19T01:53:10.2421177Z ##[error]Process completed with exit code 22.
+2026-10-19T01:53:10.2578459Z Cleaning up orphan processes

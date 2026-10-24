@@ -192,6 +192,7 @@ export function repoRoutes(app: FastifyInstance, ctx: AppContext): void {
         status: z.enum(['open', 'resolved', 'suppressed', 'all']).default('open'),
         source: z.string().max(50).optional(),
         search: z.string().max(100).optional(),
+        dependency: z.enum(['1']).optional(),
         limit: z.coerce.number().int().min(1).max(500).default(100),
         offset: z.coerce.number().int().min(0).default(0),
       })
@@ -204,6 +205,7 @@ export function repoRoutes(app: FastifyInstance, ctx: AppContext): void {
       if (withSeverity && q.severity) (where.push('f.severity = ?'), args.push(q.severity));
       if (q.status !== 'all') (where.push('f.status = ?'), args.push(q.status));
       if (q.source) (where.push('f.source = ?'), args.push(q.source));
+      if (q.dependency) where.push("f.package IS NOT NULL AND f.source IN ('osv.dev', 'dependabot', 'trivy')");
       if (q.search) (where.push("(f.title LIKE '%' || ? || '%' OR f.file LIKE '%' || ? || '%' OR f.rule_id LIKE '%' || ? || '%')"), args.push(q.search, q.search, q.search));
       return { sql: where.join(' AND '), args };
     };

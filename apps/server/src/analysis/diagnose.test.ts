@@ -16,6 +16,8 @@ describe('diagnoseLog', () => {
     ['oom.log', 'out-of-memory', /memory/],
     ['permission-denied.log', 'auth-permission', /denied/],
     ['python-module-missing.log', 'dependency-install', /httpx/],
+    // Real log from a scheduled health-ping job: the called service returned 502.
+    ['upstream-502-healthcheck.log', 'network', /HTTP 502 .*not in this repository/],
   ];
 
   it.each(cases)('%s → %s', (file, category, summary) => {

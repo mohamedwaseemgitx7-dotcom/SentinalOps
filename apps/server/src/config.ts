@@ -18,6 +18,8 @@ export interface AppConfig {
   dbFile: string;
   /** Login/setup attempts per IP per minute. */
   authRateLimitPerMin: number;
+  /** API requests per session (or per IP when anonymous) per minute. */
+  apiRateLimitPerMin: number;
 }
 
 function bool(v: string | undefined, fallback: boolean): boolean {
@@ -41,6 +43,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     logLevel: env.LOG_LEVEL ?? 'info',
     dbFile: env.SENTINELOPS_DB_FILE ?? 'sentinelops.db',
     authRateLimitPerMin: Number(env.SENTINELOPS_AUTH_RATE_LIMIT ?? 10),
+    apiRateLimitPerMin: Number(env.SENTINELOPS_API_RATE_LIMIT ?? 600),
     ...overrides,
   };
 }

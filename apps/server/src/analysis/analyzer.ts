@@ -128,14 +128,15 @@ export class Analyzer {
         ? candidates
         : [...candidates].sort((a, b) => secretPriority(b) - secretPriority(a)).slice(0, REMOTE_SECRET_SCAN_LIMIT);
       let secretCount = 0;
-      for (const file of prioritised) {
+      // Remote reads are one API call each, so fetch with bounded concurrency.
+      await mapLimit(prioritised, src.kind === 'local' ? 1 : 8, async (file) => {
         const text = await src.read(file);
-        if (text === null) continue;
+        if (text === null) return;
         src.scannedForSecrets.add(file);
         const out = scanSecrets(file, text);
         secretCount += out.length;
         findings.push(...out);
-      }
+      });
       checks.push({
         name: 'Secret pattern scan',
         status: 'ran',
@@ -286,6 +287,14 @@ function secretPriority(file: string): number {
   if (/config|settings|secret|credential|auth/.test(file.toLowerCase())) return 5;
   if (file.startsWith('.github/')) return 4;
   return /\.(md|txt)$/.test(b) ? 0 : 2;
+}
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
 function countBy<T>(items: T[], key: (t: T) => string): Record<string, number> {

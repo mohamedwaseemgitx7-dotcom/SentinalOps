@@ -7,6 +7,7 @@ import { now, type DB } from './db.ts';
  */
 export const WEIGHTS = { ci: 25, security: 25, incidents: 20, availability: 20, latency: 10 } as const;
 export type ComponentKey = keyof typeof WEIGHTS;
+export const MIN_COVERAGE = 0.5;
 
 export interface HealthComponent {
   key: ComponentKey;
@@ -90,8 +91,9 @@ export function computeHealth(db: DB, opts: { repoId?: number } = {}): HealthRes
   const known = components.filter((c) => c.score !== null);
   const totalWeight = components.reduce((a, c) => a + c.weight, 0);
   const knownWeight = known.reduce((a, c) => a + c.weight, 0);
-  const score = knownWeight ? Math.round(known.reduce((a, c) => a + c.score! * c.weight, 0) / knownWeight) : null;
   const coverage = totalWeight ? knownWeight / totalWeight : 0;
+  // Below half coverage a single input would dominate the headline, so no score is produced.
+  const score = knownWeight && coverage >= MIN_COVERAGE ? Math.round(known.reduce((a, c) => a + c.score! * c.weight, 0) / knownWeight) : null;
   const status = score === null ? 'unknown' : score >= 85 ? 'healthy' : score >= 65 ? 'warning' : 'critical';
 
   const fresh = (sql: string) => (db.prepare(sql).get() as { t: string | null }).t;

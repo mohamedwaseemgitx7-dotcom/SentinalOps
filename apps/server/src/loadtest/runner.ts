@@ -109,6 +109,9 @@ export class LoadTestRunner {
         this.db.prepare('UPDATE load_tests SET status = ?, finished_at = ?, result = ? WHERE id = ?').run(r.stoppedReason ? 'stopped' : passed ? 'passed' : 'failed', now(), JSON.stringify(result), id);
         this.bus.publish('loadtest.finished', passed ? 'success' : 'warning', `Load test #${id} ${passed ? 'passed' : 'did not meet thresholds'}: p95 ${r.latencyMs.p95} ms, errors ${r.errorRatePct}%`, `/load-tests/${id}`);
         this.bus.invalidate('loadtests');
+        // The worker's stop-message listener keeps it alive, so end it explicitly.
+        this.active = null;
+        void worker.terminate();
       }
     });
     worker.on('error', (err) => {
@@ -118,7 +121,7 @@ export class LoadTestRunner {
     });
     worker.on('exit', () => {
       clearInterval(sampler);
-      this.active = null;
+      if (this.active?.worker === worker) this.active = null;
     });
     return id;
   }

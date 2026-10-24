@@ -202,6 +202,9 @@ describe('monitoring, incidents and recovery verification', () => {
     expect(ci.score).toBeNull(); // no workflow runs → unknown, not "healthy"
     expect(h.partial).toBe(true);
     expect(h.coverage).toBeLessThan(1);
+    // With under half the inputs measured, no headline score is produced at all.
+    if (h.coverage < 0.5) expect(h.score).toBeNull();
+    else expect(h.score).not.toBeNull();
   });
 
   it('enforces load-test target authorisation and caps', async () => {
@@ -234,4 +237,72 @@ describe('login rate limiting', () => {
     await built.app.close();
     fs.rmSync(dir, { recursive: true, force: true });
   });
+});
+
+describe('serving the web UI', () => {
+  it('serves the SPA shell at / and for client routes, but 404s unknown API paths', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-web-'));
+    const web = path.join(dir, 'web');
+    fs.mkdirSync(path.join(web, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(web, 'index.html'), '<!doctype html><div id="root"></div>');
+    fs.writeFileSync(path.join(web, 'assets', 'app-abc.js'), 'console.log(1)');
+    const built = await buildApp(loadConfig({ dataDir: dir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: web, githubToken: null }));
+    const root = await built.app.inject('/');
+    expect(root.statusCode).toBe(200);
+    expect(root.body).toContain('id="root"');
+    expect((await built.app.inject('/repositories/5')).body).toContain('id="root"');
+    const asset = await built.app.inject('/assets/app-abc.js');
+    expect(asset.headers['cache-control']).toContain('immutable');
+    expect((await built.app.inject('/api/nope')).statusCode).toBeGreaterThanOrEqual(400);
+    await built.app.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('API rate limiting', () => {
+  it('limits per session, never limits the liveness probe', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-api-rl-'));
+    const built = await buildApp(loadConfig({ dataDir: dir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: null, githubToken: null, apiRateLimitPerMin: 20, authRateLimitPerMin: 100 }));
+    const { app: a, setup } = built;
+    await a.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: setup!.token, username: 'admin1', password: PASSWORD } });
+    const login = async () => cookieFrom(await a.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'admin1', password: PASSWORD } }));
+    const s1 = await login();
+    const s2 = await login();
+    const codes: number[] = [];
+    for (let i = 0; i < 25; i++) codes.push((await a.inject({ url: '/api/overview', headers: { cookie: s1 } })).statusCode);
+    expect(codes).toContain(429);
+    // A different session from the same IP is unaffected.
+    expect((await a.inject({ url: '/api/overview', headers: { cookie: s2 } })).statusCode).toBe(200);
+    for (let i = 0; i < 30; i++) expect((await a.inject('/api/health')).statusCode).toBe(200);
+    await a.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('load test runner', () => {
+  it('runs a bounded local test to completion and allows the next one', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-lt-'));
+    const built = await buildApp(loadConfig({ dataDir: dir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: null, githubToken: null }));
+    const target = http.createServer((_q, s) => s.end('ok'));
+    await new Promise<void>((r) => target.listen(0, '127.0.0.1', r));
+    const url = `http://127.0.0.1:${(target.address() as AddressInfo).port}/`;
+    const req = { url, method: 'GET' as const, vus: 2, durationS: 5, rampUpS: 0, requestTimeoutMs: 2000, abortErrorRatePct: 50, rpsPerVu: 20, thresholds: { p95Ms: 1000, errorRatePct: 1 }, ownershipConfirmed: false };
+    const first = built.ctx.loadTests.start(req, 'test');
+    await expect(async () => built.ctx.loadTests.start(req, 'test')).rejects.toThrow(/already running/);
+    for (let i = 0; i < 40 && built.ctx.loadTests.status(); i++) await new Promise((r) => setTimeout(r, 250));
+    expect(built.ctx.loadTests.status()).toBeNull();
+    const row = built.ctx.db.prepare('SELECT status, result FROM load_tests WHERE id = ?').get(first) as { status: string; result: string };
+    expect(row.status).toBe('passed');
+    const result = JSON.parse(row.result);
+    expect(result.totalRequests).toBeGreaterThan(50);
+    expect(result.errorRatePct).toBe(0);
+    // A second test can start once the first has finished.
+    const second = built.ctx.loadTests.start(req, 'test');
+    expect(second).toBeGreaterThan(first);
+    built.ctx.loadTests.stop();
+    for (let i = 0; i < 40 && built.ctx.loadTests.status(); i++) await new Promise((r) => setTimeout(r, 250));
+    await new Promise<void>((r) => target.close(() => r()));
+    await built.app.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }, 30_000);
 });

@@ -118,6 +118,24 @@ const RULES: Rule[] = [
     recommendation: () => 'Grant the minimum missing scope in the workflow `permissions:` block (or the cloud role policy) and confirm the secret exists for this event/branch.',
   },
   {
+    // e.g. `curl --fail https://api.example.com/health` → "curl: (22) The requested URL returned error: 502"
+    category: 'network', confidence: 'high',
+    re: /(curl: \((\d+)\) (?:The requested URL returned error: (\d{3})|(.+))|wget: server returned error: HTTP\/\S+ (\d{3}))/,
+    summary: (m) => {
+      const status = m[3] ?? m[5];
+      if (status && status.startsWith('5')) return `A service called by this job returned HTTP ${status} (server error). The failure is in that service, not in this repository's code.`;
+      if (status) return `A service called by this job returned HTTP ${status}.`;
+      return `A network request made with curl failed: ${(m[4] ?? '').trim().slice(0, 140)}`;
+    },
+    recommendation: (m) => {
+      const status = m[3] ?? m[5];
+      if (status && status.startsWith('5')) return 'Check the called service (its platform status page and logs) for the time of this run. If it is a health or keep-alive check against a free-tier host that sleeps, allow a longer warm-up or treat the check as non-blocking.';
+      if (status === '401' || status === '403') return 'The request was rejected — verify the credential or secret passed to this step and that it has access to the endpoint.';
+      if (status === '404') return 'The URL does not exist — check the endpoint path and deployment.';
+      return 'Re-run once to rule out a transient network issue; if it repeats, verify the URL, DNS and that the target is reachable from GitHub-hosted runners.';
+    },
+  },
+  {
     category: 'network', confidence: 'medium',
     re: /(ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo|socket hang up|Could not resolve host|Connection reset by peer|TLS handshake timeout|503 Service Unavailable|502 Bad Gateway)/,
     summary: () => 'A network request failed (connection refused/reset or DNS).',

@@ -15,7 +15,7 @@ import { now, openDb } from './db.ts';
 import { GitHubClient } from './github/client.ts';
 import { snapshotHealth } from './health.ts';
 import { IncidentService } from './incidents.ts';
-import { safeEqual } from './lib/crypto.ts';
+import { safeEqual, sha256 } from './lib/crypto.ts';
 import { HttpError } from './lib/errors.ts';
 import { EventBus } from './lib/events.ts';
 import { LoadTestRunner } from './loadtest/runner.ts';
@@ -90,10 +90,15 @@ export async function buildApp(config: AppConfig): Promise<{ app: FastifyInstanc
   await app.register(cookie);
   await app.register(rateLimit, {
     global: true,
-    max: 600,
+    max: config.apiRateLimitPerMin,
     timeWindow: '1 minute',
-    // Static assets are not limited; the API is.
-    allowList: (req) => !req.url.startsWith('/api/'),
+    // Static assets and the trivial liveness probe are not limited; the rest of the API is.
+    allowList: (req) => !req.url.startsWith('/api/') || req.url === '/api/health',
+    // Signed-in users are limited per session, so users behind one NAT/proxy do not starve each other.
+    keyGenerator: (req) => {
+      const token = req.cookies?.[SESSION_COOKIE];
+      return token ? `s:${sha256(token)}` : `ip:${req.ip}`;
+    },
   });
 
   app.decorateRequest('session', null);
@@ -141,6 +146,8 @@ export async function buildApp(config: AppConfig): Promise<{ app: FastifyInstanc
       index: false,
       setHeaders: (res, filePath) => res.header('Cache-Control', filePath.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'public, max-age=3600'),
     });
+    // `/` is a directory to the static plugin (which would answer 403), so serve the app shell explicitly.
+    app.get('/', { config: { public: true } }, (_req, reply) => reply.type('text/html').header('Cache-Control', 'no-cache').send(indexHtml));
   }
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith('/api/') || !indexHtml || req.method !== 'GET') return reply.code(404).send({ error: 'not_found', message: 'Not found' });
