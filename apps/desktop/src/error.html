@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>SentinelOps — startup error</title>
+    <style>
+      body { margin: 0; font: 14px/1.6 'Segoe UI', system-ui, sans-serif; background: #0a1120; color: #e8edf7; display: grid; place-items: center; min-height: 100vh; }
+      main { max-width: 560px; padding: 32px; border: 1px solid #2e3f66; border-radius: 14px; background: #111a2e; }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      code { display: block; white-space: pre-wrap; background: #060b16; padding: 10px; border-radius: 8px; color: #ff7b7b; margin: 12px 0; }
+      li { color: #a9b4cc; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>SentinelOps could not start its local server</h1>
+      <code id="msg"></code>
+      <ul>
+        <li>Close other SentinelOps windows and start it again.</li>
+        <li>Check that the data folder is writable: <span id="dir"></span></li>
+        <li>If the database was damaged, move it aside (it is not deleted automatically).</li>
+      </ul>
+    </main>
+    <script>
+      const q = new URLSearchParams(location.search);
+      document.getElementById('msg').textContent = q.get('message') || 'Unknown error';
+      document.getElementById('dir').textContent = q.get('dataDir') || '(unknown)';
+    </script>
+  </body>
+</html>

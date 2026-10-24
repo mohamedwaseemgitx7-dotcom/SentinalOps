@@ -236,8 +236,8 @@ export function Shell({ user, onLogout, children }: { user: SessionUser; onLogou
             <ThemeToggle />
             <Link to="/settings" className="icon-btn hide-sm" aria-label="Settings"><Icon name="settings" /></Link>
             <div style={{ position: 'relative' }}>
-              <button className="user-chip" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-haspopup="menu">
-                <span className="avatar">{user.username.slice(0, 2).toUpperCase()}</span>
+              <button className="user-chip" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-haspopup="menu" aria-label={`Account menu for ${user.username}`}>
+                <span className="avatar" aria-hidden="true">{user.username.slice(0, 2).toUpperCase()}</span>
                 <span className="name" style={{ fontSize: 13 }}>{user.username}</span>
               </button>
               {menu && (

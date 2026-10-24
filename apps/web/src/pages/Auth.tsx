@@ -8,7 +8,7 @@ type Mode = 'login' | 'setup' | 'invite';
 
 declare global {
   interface Window {
-    sentinelDesktop?: { getSetupToken: () => Promise<string | null>; version: string };
+    sentinelDesktop?: { getSetupToken: () => Promise<string | null> };
   }
 }
 
