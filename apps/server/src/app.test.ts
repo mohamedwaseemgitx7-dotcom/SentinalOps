@@ -202,6 +202,26 @@ describe('monitoring, incidents and recovery verification', () => {
     expect(inc.resolved_at).toBeTruthy();
   });
 
+  it('discards a check whose monitor was deleted and its id reused while it ran', async () => {
+    const { cookie, csrf } = await login('mohamedwaseem');
+    const headers = { cookie, 'x-csrf-token': csrf };
+    const deadUrl = 'http://127.0.0.1:9/'; // closed port: fails, then retries after 2 s
+    const first = (await app.inject({ method: 'POST', url: '/api/monitors', headers, payload: { name: 'stale', url: deadUrl, retries: 1, failureThreshold: 1 } })).json().id as number;
+    const row = ctx.db.prepare('SELECT * FROM monitors WHERE id = ?').get(first) as never;
+    // Wait for the creation-time check to finish so we control the in-flight one.
+    for (let i = 0; i < 100 && (ctx.db.prepare('SELECT last_checked_at FROM monitors WHERE id = ?').get(first) as { last_checked_at: string | null }).last_checked_at === null; i++) await new Promise((r) => setTimeout(r, 50));
+    ctx.incidents.resolveByRef('monitor', `monitor:${first}`, 'test setup');
+    const pending = ctx.scheduler.check(row, true); // in flight for ~2 s
+    await app.inject({ method: 'DELETE', url: `/api/monitors/${first}`, headers });
+    ctx.db.prepare("INSERT INTO monitors (id, name, url, interval_s, timeout_ms, created_at) VALUES (?, 'replacement', ?, 300, 5000, ?)").run(first, url, new Date(Date.now() + 1).toISOString());
+    await pending;
+    const replacement = ctx.db.prepare('SELECT consecutive_failures, last_checked_at FROM monitors WHERE id = ?').get(first) as { consecutive_failures: number; last_checked_at: string | null };
+    expect(replacement).toEqual({ consecutive_failures: 0, last_checked_at: null });
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM checks WHERE monitor_id = ?').get(first)).toEqual({ n: 0 });
+    expect(ctx.db.prepare("SELECT COUNT(*) AS n FROM incidents WHERE monitor_id = ? AND status != 'resolved'").get(first)).toEqual({ n: 0 });
+    ctx.db.prepare('DELETE FROM monitors WHERE id = ?').run(first);
+  }, 15_000);
+
   it('computes a health score only from inputs that have data', async () => {
     const { cookie } = await login('mohamedwaseem');
     const res = await app.inject({ url: '/api/health-score', headers: { cookie } });

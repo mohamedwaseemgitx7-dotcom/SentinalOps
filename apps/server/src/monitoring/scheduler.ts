@@ -15,6 +15,7 @@ export interface MonitorRow {
   failure_threshold: number;
   latency_threshold_ms: number;
   enabled: number;
+  created_at: string;
   last_checked_at: string | null;
   last_ok: number | null;
   consecutive_failures: number;
@@ -37,7 +38,8 @@ export const MONITOR_LIMITS = {
  */
 export class MonitorScheduler {
   private timer: NodeJS.Timeout | null = null;
-  private inFlight = new Set<number>();
+  // Keyed by id + created_at: SQLite can reuse the id of a deleted monitor.
+  private inFlight = new Set<string>();
   private lastPurge = 0;
   private tlsCheckedAt = new Map<number, number>();
 
@@ -65,7 +67,7 @@ export class MonitorScheduler {
 
   async tick(): Promise<void> {
     const due = (this.db.prepare('SELECT * FROM monitors WHERE enabled = 1').all() as unknown as MonitorRow[]).filter(
-      (m) => !this.inFlight.has(m.id) && (!m.last_checked_at || Date.parse(m.last_checked_at) + m.interval_s * 1000 <= Date.now()),
+      (m) => !this.inFlight.has(identity(m)) && (!m.last_checked_at || Date.parse(m.last_checked_at) + m.interval_s * 1000 <= Date.now()),
     );
     const slots = Math.max(0, MONITOR_LIMITS.concurrency - this.inFlight.size);
     await Promise.all(due.slice(0, slots).map((m) => this.check(m, false).catch(() => {})));
@@ -78,8 +80,9 @@ export class MonitorScheduler {
   }
 
   async check(m: MonitorRow, manual: boolean): Promise<{ ok: boolean; statusCode: number | null; latencyMs: number | null; error: string | null }> {
-    if (this.inFlight.has(m.id)) throw new Error('A check for this monitor is already running.');
-    this.inFlight.add(m.id);
+    const key = identity(m);
+    if (this.inFlight.has(key)) throw new Error('A check for this monitor is already running.');
+    this.inFlight.add(key);
     try {
       let attempts = 0;
       let res = await probe(m.url, { method: m.method, timeoutMs: m.timeout_ms, expected: m.expected_status });
@@ -89,11 +92,16 @@ export class MonitorScheduler {
         res = await probe(m.url, { method: m.method, timeoutMs: m.timeout_ms, expected: m.expected_status });
         attempts++;
       }
+      // The monitor may have been edited, deleted or replaced while the probe ran: re-read before writing.
+      const current = this.db.prepare('SELECT created_at, consecutive_failures, last_ok FROM monitors WHERE id = ?').get(m.id) as
+        | { created_at: string; consecutive_failures: number; last_ok: number | null }
+        | undefined;
+      if (!current || current.created_at !== m.created_at) return { ok: res.ok, statusCode: res.statusCode, latencyMs: res.latencyMs, error: res.error };
       const ts = now();
       this.db
         .prepare('INSERT INTO checks (monitor_id, ts, ok, status_code, latency_ms, dns_ms, error, attempts, manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(m.id, ts, res.ok ? 1 : 0, res.statusCode, res.latencyMs, res.dnsMs, res.error, attempts, manual ? 1 : 0);
-      const failures = res.ok ? 0 : m.consecutive_failures + 1;
+      const failures = res.ok ? 0 : current.consecutive_failures + 1;
       this.db.prepare('UPDATE monitors SET last_checked_at = ?, last_ok = ?, consecutive_failures = ? WHERE id = ?').run(ts, res.ok ? 1 : 0, failures, m.id);
 
       const ref = `monitor:${m.id}`;
@@ -102,7 +110,7 @@ export class MonitorScheduler {
         const first = this.db.prepare('SELECT ts FROM checks WHERE monitor_id = ? AND ok = 0 ORDER BY id DESC LIMIT 1 OFFSET ?').get(m.id, failures - 1) as { ts: string } | undefined;
         const opened = this.incidents.open({ source: 'monitor', ref, title: `${m.name} is down — ${res.error ?? 'check failed'}`, severity: 'critical', monitorId: m.id, startedAt: first?.ts ?? ts });
         if (opened.created) this.incidents.addNote(opened.id, 'system', `Observed: ${res.error ?? `HTTP ${res.statusCode}`} after ${attempts} attempt(s). Root cause is not observable from outside the service.`);
-      } else if (res.ok && m.last_ok === 0) {
+      } else if (res.ok && current.last_ok === 0) {
         const resolved = this.incidents.resolveByRef('monitor', ref, `Recovered — HTTP ${res.statusCode} in ${res.latencyMs} ms`);
         if (!resolved) this.bus.publish('monitor.recovered', 'success', `${m.name} recovered (HTTP ${res.statusCode})`, `/monitoring/${m.id}`);
       } else if (!res.ok && failures === 1) {
@@ -124,7 +132,11 @@ export class MonitorScheduler {
       this.bus.invalidate('monitors');
       return { ok: res.ok, statusCode: res.statusCode, latencyMs: res.latencyMs, error: res.error };
     } finally {
-      this.inFlight.delete(m.id);
+      this.inFlight.delete(key);
     }
   }
+}
+
+function identity(m: Pick<MonitorRow, 'id' | 'created_at'>): string {
+  return `${m.id}:${m.created_at}`;
 }

@@ -83,6 +83,8 @@ export function opsRoutes(app: FastifyInstance, ctx: AppContext): void {
   app.delete('/api/monitors/:id', async (req) => {
     const { id } = idParam.parse(req.params);
     const m = getMonitor(id);
+    // Close its incident first so a monitor that later reuses this id cannot inherit it.
+    ctx.incidents.resolveByRef('monitor', `monitor:${id}`, 'Monitor deleted');
     db.prepare('DELETE FROM monitors WHERE id = ?').run(id);
     logAudit(ctx, req, 'monitors.deleted', m.url);
     ctx.bus.invalidate('monitors');
