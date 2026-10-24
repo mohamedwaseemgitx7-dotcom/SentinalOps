@@ -40,7 +40,8 @@ export async function extractDependencies(src: RepoSource): Promise<{ deps: Depe
         const directNames = new Set([...Object.keys(rootPkg?.dependencies ?? {}), ...Object.keys(rootPkg?.devDependencies ?? {})]);
         if (lock.packages) {
           for (const [key, meta] of Object.entries(lock.packages)) {
-            if (!key || meta.link || !meta.version) continue;
+            // Only installed packages; skip the root ("") and workspace folders like "apps/server".
+            if (!key.includes('node_modules/') || meta.link || !meta.version) continue;
             const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
             add({ ecosystem: 'npm', name, version: meta.version, manifest: file, direct: directNames.has(name) && key === `node_modules/${name}` });
           }

@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "reset-accounts": "node --env-file-if-exists=../../.env src/cli/reset-accounts.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.3",

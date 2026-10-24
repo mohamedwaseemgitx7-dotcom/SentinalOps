@@ -45,3 +45,6 @@ artifacts/**/*.webm
 Thumbs.db
 .vscode/
 .idea/
+
+# Live-test screenshots show real repository/service names; kept local
+artifacts/screenshots/live/

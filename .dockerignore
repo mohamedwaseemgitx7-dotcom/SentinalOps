@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+apps/desktop/release
+data
+.cache
+.git
+.env
+.env.*
+artifacts
+test-results
+playwright-report
+*.db

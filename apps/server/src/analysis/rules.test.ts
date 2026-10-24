@@ -112,3 +112,37 @@ describe('local repository analysis', () => {
     expect(await src.read('../../etc/passwd')).toBeNull();
   });
 });
+
+describe('secret scanner precision (regressions found by self-analysis)', () => {
+  const header = '-----BEGIN ' + 'PRIVATE KEY-----';
+  const body = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7' + 'x'.repeat(20);
+
+  it('ignores a key header with no key material (docs, regexes, redaction code)', () => {
+    expect(scanSecrets('errors.ts', `.replace(/x/g, '${header} [REDACTED]')`)).toHaveLength(0);
+  });
+
+  it('flags a PEM block with a base64 body, on its own lines or escaped inline', () => {
+    expect(scanSecrets('key.pem', `${header}\n${body}\n`).map((f) => f.ruleId)).toContain('SEC-PRIVATE-KEY');
+    expect(scanSecrets('sa.json', `"private_key": "${header}\n${body}"`).map((f) => f.ruleId)).toContain('SEC-PRIVATE-KEY');
+  });
+
+  it('ignores plain words assigned to password-like names', () => {
+    expect(scanSecrets('Auth.tsx', `autoComplete={mode ? 'current-password' : 'new-password'}`)).toHaveLength(0);
+  });
+
+  it('downgrades credential-like strings in test files', () => {
+    const [f] = scanSecrets('src/app.test.ts', "const password = 'Abc123longvalue'");
+    expect(f!.severity).toBe('low');
+    expect(f!.title).toMatch(/test file/);
+  });
+});
+
+describe('dependency extraction', () => {
+  it('skips workspace folders in package-lock.json', async () => {
+    const { extractDependencies } = await import('./osv.ts');
+    const lock = { lockfileVersion: 3, packages: { '': { dependencies: { a: '1.0.0' } }, 'apps/server': { name: '@x/server', version: '0.1.0' }, 'node_modules/a': { version: '1.0.0' }, 'node_modules/@x/server': { link: true, resolved: 'apps/server' } } };
+    const src = { kind: 'local' as const, files: ['package-lock.json'], truncated: false, sizes: new Map(), scannedForSecrets: new Set<string>(), read: async () => JSON.stringify(lock) };
+    const { deps } = await extractDependencies(src);
+    expect(deps.map((d) => d.name)).toEqual(['a']);
+  });
+});

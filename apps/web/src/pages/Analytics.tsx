@@ -146,7 +146,7 @@ function HealthFormula() {
           <tr><td>Response time</td><td className="num">10%</td><td>share of successful checks within each monitor’s latency threshold</td><td>no successful checks</td></tr>
         </tbody>
       </table></div>
-      <DataSourceNote>Unknown components are excluded and the remaining weights re-normalised; the score is labelled “partial” and shows its coverage. Status: ≥ 85 healthy, ≥ 65 warning, otherwise critical. Full definition: docs/HEALTH-SCORE.md.</DataSourceNote>
+      <DataSourceNote>Unknown components are excluded and the remaining weights re-normalised; the score is labelled “partial” and shows its coverage. Below 50 % coverage no score is produced. Status: ≥ 85 healthy, ≥ 65 warning, otherwise critical. Full definition: docs/HEALTH-SCORE.md.</DataSourceNote>
     </Card>
   );
 }

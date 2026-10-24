@@ -57,6 +57,22 @@ const PLACEHOLDER = /^(x+|\*+|changeme|change[-_]?me|example|placeholder|your[-_
 const SECRET_SCAN_EXT = /\.(js|jsx|ts|tsx|mjs|cjs|py|rb|go|java|kt|cs|php|rs|sh|ps1|env|ya?ml|json|toml|ini|cfg|conf|properties|tf|tfvars|xml|txt|md|dockerfile)$/i;
 const SECRET_SKIP = /(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|\.min\.js|\.map|(^|\/)fixtures?\/|(^|\/)testdata\/)$/i;
 
+const TEST_FILE = /(\.|_)(test|spec)\.[a-z]+$|(^|\/)(tests?|__tests__|e2e|fixtures?)\//i;
+
+/** Generic assignments only count when the value mixes character classes like real credentials do. */
+function looksLikeCredential(value: string): boolean {
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/].filter((re) => re.test(value)).length;
+  return classes >= 2 && !/\s/.test(value);
+}
+
+function hasKeyBody(line: string, nextLine: string | undefined): boolean {
+  // Prefix match: bodies inside YAML/JSON strings may end with a quote or comma.
+  const BODY = /^[A-Za-z0-9+/=]{40,}/;
+  const after = line.slice(line.indexOf('KEY-----') + 'KEY-----'.length);
+  // Inline PEM in JSON/env values uses escaped newlines: "-----BEGIN ...-----\nMIIE..."
+  return /^(\\n|\\r\\n)[A-Za-z0-9+/]{40}/.test(after) || BODY.test((nextLine ?? '').trim());
+}
+
 export function redactSecret(value: string): string {
   if (value.startsWith('-----BEGIN')) return '-----BEGIN … PRIVATE KEY----- [redacted]';
   const keep = Math.min(4, Math.floor(value.length / 4));
@@ -73,13 +89,16 @@ export function scanSecrets(file: string, text: string): Finding[] {
       pat.re.lastIndex = 0;
       for (const m of line.matchAll(pat.re)) {
         const secret = m[1]!;
-        if (pat.id === 'SEC-GENERIC' && (PLACEHOLDER.test(secret) || /process\.env|os\.environ|\$\{|getenv/i.test(line))) continue;
+        if (pat.id === 'SEC-GENERIC' && (PLACEHOLDER.test(secret) || !looksLikeCredential(secret) || /process\.env|os\.environ|\$\{|getenv/i.test(line))) continue;
         if (pat.id === 'SEC-DB-URL' && /(:\/\/[^:]+:(password|pass|\$\{|<))/i.test(secret)) continue;
+        // A key header alone (docs, regexes, redaction code) is not a key: require a base64 body.
+        if (pat.id === 'SEC-PRIVATE-KEY' && !hasKeyBody(line, lines[i + 1])) continue;
+        const inTest = TEST_FILE.test(file);
         out.push({
           ruleId: pat.id,
           source: 'sentinelops-secrets',
-          severity: pat.severity,
-          title: `${pat.name} committed to source`,
+          severity: inTest && pat.severity !== 'critical' ? 'low' : pat.severity,
+          title: `${pat.name} committed to source${inTest ? ' (test file)' : ''}`,
           file,
           line: i + 1,
           evidence: line.replace(secret, redactSecret(secret)).trim().slice(0, 240),
