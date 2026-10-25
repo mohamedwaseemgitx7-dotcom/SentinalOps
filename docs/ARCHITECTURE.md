@@ -73,3 +73,11 @@ All under `/api`, JSON, cookie session, `X-CSRF-Token` on mutations.
 - One SSE connection per tab (≤ 5 per user, ≤ 1000 total) instead of polling; clients refetch only invalidated topics, debounced.
 - Rate limits: 600 requests/min per session (per IP when anonymous); `/api/health` exempt.
 - Scaling beyond one process would need a shared database (e.g. Postgres) and a single scheduler leader; this is intentionally not built for the ₹0 local-first target. Measured limits are in LOAD-TEST-RESULTS.md.
+
+## v0.2.0 additions
+
+- `monitoring/conditions.ts` — assertion parser/evaluator; results stored per check in `checks.details`.
+- `monitoring/heartbeats.ts` — push monitors (`heartbeats`, `heartbeat_pings`); public `GET|POST /ping/:token[/start|/fail|/<0-255>]`; swept on the scheduler tick.
+- `notifications.ts` — encrypted `channels` and an outbox `notifications` table (3 attempts, 30 s / 2 min backoff); incidents enqueue on open/resolve.
+- `lib/secretbox.ts` — AES-256-GCM with `<dataDir>/secret.key`.
+- Monitor columns `conditions`, `success_threshold`, `consecutive_successes` (migration v2). Auth `maxUsers` ≤ 3.

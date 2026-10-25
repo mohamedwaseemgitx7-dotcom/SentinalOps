@@ -8,7 +8,9 @@ import type { GitHubClient } from './github/client.ts';
 import type { IncidentService } from './incidents.ts';
 import { audit, type EventBus } from './lib/events.ts';
 import type { LoadTestRunner } from './loadtest/runner.ts';
+import type { HeartbeatService } from './monitoring/heartbeats.ts';
 import type { MonitorScheduler } from './monitoring/scheduler.ts';
+import type { Notifier } from './notifications.ts';
 
 export interface AppContext {
   config: AppConfig;
@@ -20,6 +22,8 @@ export interface AppContext {
   analyzer: Analyzer;
   pipelines: PipelineService;
   scheduler: MonitorScheduler;
+  heartbeats: HeartbeatService;
+  notifier: Notifier;
   loadTests: LoadTestRunner;
   startedAt: string;
   version: string;

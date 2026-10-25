@@ -5,6 +5,7 @@ import { now, parseJson } from '../db.ts';
 import { badRequest, conflict, notFound } from '../lib/errors.ts';
 import { LOAD_LIMITS } from '../loadtest/runner.ts';
 import { validateTargetUrl } from '../monitoring/probe.ts';
+import { CONDITION_LIMITS, validateConditions } from '../monitoring/conditions.ts';
 import { MONITOR_LIMITS, type MonitorRow } from '../monitoring/scheduler.ts';
 import { analyzeSite } from '../monitoring/site.ts';
 
@@ -21,7 +22,17 @@ const monitorBody = z.object({
   failureThreshold: z.number().int().min(1).max(10).default(2),
   latencyThresholdMs: z.number().int().min(50).max(30_000).default(1000),
   enabled: z.boolean().default(true),
+  /** Response assertions, e.g. `[BODY].status == "ok"`. */
+  conditions: z.array(z.string().trim().min(1).max(CONDITION_LIMITS.maxLength)).max(CONDITION_LIMITS.maxConditions).default([]),
+  /** Consecutive successful checks required before an open incident auto-resolves. */
+  successThreshold: z.number().int().min(1).max(10).default(1),
 });
+
+function checkedConditions(conditions: string[]): string {
+  const errors = validateConditions(conditions);
+  if (errors.length) throw badRequest(`Invalid assertion(s): ${errors.join('; ')}`);
+  return JSON.stringify(conditions);
+}
 
 export function opsRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
@@ -59,8 +70,9 @@ export function opsRoutes(app: FastifyInstance, ctx: AppContext): void {
     const url = validateTargetUrl(body.url).toString();
     const count = (db.prepare('SELECT COUNT(*) AS n FROM monitors').get() as { n: number }).n;
     if (count >= MONITOR_LIMITS.maxMonitors) throw badRequest(`Monitor limit (${MONITOR_LIMITS.maxMonitors}) reached.`);
-    const info = db.prepare(`INSERT INTO monitors (name, url, method, interval_s, timeout_ms, expected_status, retries, failure_threshold, latency_threshold_ms, enabled, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(body.name, url, body.method, body.intervalS, body.timeoutMs, body.expectedStatus, body.retries, body.failureThreshold, body.latencyThresholdMs, body.enabled ? 1 : 0, now());
+    const conditions = checkedConditions(body.conditions);
+    const info = db.prepare(`INSERT INTO monitors (name, url, method, interval_s, timeout_ms, expected_status, retries, failure_threshold, latency_threshold_ms, enabled, created_at, conditions, success_threshold)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(body.name, url, body.method, body.intervalS, body.timeoutMs, body.expectedStatus, body.retries, body.failureThreshold, body.latencyThresholdMs, body.enabled ? 1 : 0, now(), conditions, body.successThreshold);
     const id = Number(info.lastInsertRowid);
     logAudit(ctx, req, 'monitors.created', url);
     ctx.bus.publish('monitor.created', 'info', `Monitoring started for ${body.name} every ${body.intervalS}s`, `/monitoring/${id}`);
@@ -73,8 +85,9 @@ export function opsRoutes(app: FastifyInstance, ctx: AppContext): void {
     getMonitor(id);
     const body = monitorBody.parse(req.body);
     const url = validateTargetUrl(body.url).toString();
-    db.prepare(`UPDATE monitors SET name = ?, url = ?, method = ?, interval_s = ?, timeout_ms = ?, expected_status = ?, retries = ?, failure_threshold = ?, latency_threshold_ms = ?, enabled = ? WHERE id = ?`)
-      .run(body.name, url, body.method, body.intervalS, body.timeoutMs, body.expectedStatus, body.retries, body.failureThreshold, body.latencyThresholdMs, body.enabled ? 1 : 0, id);
+    const conditions = checkedConditions(body.conditions);
+    db.prepare(`UPDATE monitors SET name = ?, url = ?, method = ?, interval_s = ?, timeout_ms = ?, expected_status = ?, retries = ?, failure_threshold = ?, latency_threshold_ms = ?, enabled = ?, conditions = ?, success_threshold = ? WHERE id = ?`)
+      .run(body.name, url, body.method, body.intervalS, body.timeoutMs, body.expectedStatus, body.retries, body.failureThreshold, body.latencyThresholdMs, body.enabled ? 1 : 0, conditions, body.successThreshold, id);
     logAudit(ctx, req, 'monitors.updated', url);
     ctx.bus.invalidate('monitors');
     return { ok: true };
@@ -105,7 +118,8 @@ export function opsRoutes(app: FastifyInstance, ctx: AppContext): void {
     const q = z.object({ hours: z.coerce.number().int().min(1).max(24 * 90).default(24) }).parse(req.query);
     const m = getMonitor(id);
     const since = new Date(Date.now() - q.hours * 3_600_000).toISOString();
-    const checks = db.prepare('SELECT ts, ok, status_code, latency_ms, dns_ms, error, attempts, manual FROM checks WHERE monitor_id = ? AND ts >= ? ORDER BY id DESC LIMIT 5000').all(id, since);
+    const checks = (db.prepare('SELECT ts, ok, status_code, latency_ms, dns_ms, error, attempts, manual, details FROM checks WHERE monitor_id = ? AND ts >= ? ORDER BY id DESC LIMIT 5000').all(id, since) as { details: string | null }[])
+      .map((c) => ({ ...c, details: parseJson(c.details, null) }));
     const incidents = db.prepare('SELECT id, title, status, severity, started_at, detected_at, resolved_at FROM incidents WHERE monitor_id = ? ORDER BY id DESC LIMIT 50').all(id);
     return { monitor: m, checks, incidents };
   });

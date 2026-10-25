@@ -30,6 +30,11 @@ Administrator account and sessions · GitHub credentials (env or `gh` CLI) · re
 | Prompt injection in repo/log content | No AI provider is called; if one is added, content must be treated as data and sent only after explicit approval | design |
 | Supply chain | Exact-version pins ≥ 2 weeks old (security patches excepted); npm install scripts blocked by default; `npm audit` in CI; actions pinned to SHAs; Dependabot | `npm audit`: 0 vulnerabilities (2026-10-25) |
 | Desktop compromise via renderer | `contextIsolation`, `sandbox`, no `nodeIntegration`; navigation and new windows blocked except `https://` to the system browser; permission requests denied; server on loopback | smoke launch |
+| Account sprawl | Hard ceiling of **3 accounts**; pending invitations reserve seats; enforced in the service layer (setup, invite, accept) | max-users test |
+| Webhook SSRF (incl. DNS rebinding, redirects to metadata IPs) | http(s) only; resolve once, block private/loopback/link-local/CGNAT/multicast (IPv4+IPv6, v4-mapped) unless the channel opts in; connection pinned to the validated IP; no redirects; 10 s timeout; response bodies never read back | SSRF tests |
+| Webhook URL disclosure | AES-256-GCM encryption with a key file in the data folder (not in the DB); API returns only `scheme://host/…` | secret-storage tests |
+| Heartbeat token theft / brute force | 192-bit random tokens stored only as SHA-256; 404 for unknown tokens; 60 pings/min per token+IP; rotation; 10 KB body cap | heartbeat tests |
+| Malicious monitor responses | Assertions: no eval, globs not regex (no ReDoS), prototype keys refused, caps on depth/length/count, 1 MB body cap, fail-closed | conditions tests |
 | Unsigned binaries tampered in transit | Publish SHA-256 hashes; recommend building from source | RELEASE-CHECKLIST |
 
 ## Release gate

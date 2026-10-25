@@ -236,6 +236,68 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_health_ts ON health_snapshots(ts);
   `,
+  // v2 — response assertions, recovery hysteresis, heartbeat monitors, notification channels.
+  `
+  ALTER TABLE monitors ADD COLUMN conditions TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE monitors ADD COLUMN success_threshold INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE monitors ADD COLUMN consecutive_successes INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE checks ADD COLUMN details TEXT;
+
+  CREATE TABLE heartbeats (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    token_prefix TEXT NOT NULL,
+    timeout_s INTEGER NOT NULL,
+    grace_s INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('new','up','down','paused')),
+    last_ping_at TEXT,
+    last_start_at TEXT,
+    last_duration_ms INTEGER,
+    last_event TEXT,
+    alert_after TEXT,
+    n_pings INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_heartbeats_alert_after ON heartbeats(alert_after) WHERE status = 'up';
+  CREATE TABLE heartbeat_pings (
+    id INTEGER PRIMARY KEY,
+    heartbeat_id INTEGER NOT NULL REFERENCES heartbeats(id) ON DELETE CASCADE,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    exit_code INTEGER,
+    duration_ms INTEGER,
+    body TEXT,
+    ip TEXT
+  );
+  CREATE INDEX idx_heartbeat_pings ON heartbeat_pings(heartbeat_id, ts);
+
+  CREATE TABLE channels (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('webhook')),
+    config_enc TEXT NOT NULL,
+    target_hint TEXT NOT NULL,
+    allow_private INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    last_sent_at TEXT,
+    last_error TEXT
+  );
+  CREATE TABLE notifications (
+    id INTEGER PRIMARY KEY,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    event TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','sent','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    sent_at TEXT
+  );
+  CREATE INDEX idx_notifications_pending ON notifications(status, next_attempt_at);
+  `,
 ];
 
 export function openDb(dataDir: string, filename = 'sentinelops.db'): DB {

@@ -18,6 +18,8 @@ Read `docs/PROJECT-STATUS.md` first in every new session, then this file.
 
 ## Rules that matter here
 
+- At most 3 user accounts (hard ceiling in `auth/service.ts`).
+- Project skills live in `.claude/skills/` and security tools in `.tools/` (Gitleaks, Trivy) — inspected and pinned, see docs/INSTALLATION-LOG.md. Never put tools on PATH.
 - Never fabricate metrics. Unknown data must render as unknown. The health score is withheld below 50 % coverage.
 - Never store or log secrets. Tokens come from `GITHUB_TOKEN` or `gh auth token` on demand. Findings store redacted evidence and a hash-based fingerprint only.
 - Every new API route is authenticated by default (global `onRequest` guard). Mark routes `config: { public: true }` only deliberately; mutations need CSRF and the admin role unless `anyRole`.

@@ -32,7 +32,17 @@ interface Monitor {
   last_error?: string | null;
   open_incident_id?: number | null;
   recent?: { ok: number; latency_ms: number; ts: string }[];
+  conditions?: string;
+  success_threshold?: number;
 }
+
+const parseConditions = (raw?: string): string[] => {
+  try {
+    return JSON.parse(raw ?? '[]') as string[];
+  } catch {
+    return [];
+  }
+};
 
 function MonitorStatus({ m }: { m: Monitor }) {
   if (!m.enabled) return <Badge tone="unknown">Paused</Badge>;
@@ -79,6 +89,7 @@ export function MonitoringPage({ isAdmin }: { isAdmin: boolean }) {
           </table></div>
         )}
       </Card>
+      <HeartbeatsCard isAdmin={isAdmin} />
       <Card title="Website scans" hint="One-off public checks">
         {!scans.data?.scans.length ? <p className="muted">No scans yet.</p> : (
           <div className="table-wrap"><table>
@@ -94,7 +105,7 @@ export function MonitoringPage({ isAdmin }: { isAdmin: boolean }) {
 
 export function MonitorDetailPage({ id, isAdmin }: { id: number; isAdmin: boolean }) {
   const [hours, setHours] = useState(24);
-  const { data, error, loading, reload } = useResource<{ monitor: Monitor; checks: { ts: string; ok: number; status_code: number | null; latency_ms: number | null; dns_ms: number | null; error: string | null; attempts: number; manual: number }[]; incidents: { id: number; title: string; status: string; started_at: string; resolved_at: string | null }[] }>(`/api/monitors/${id}?hours=${hours}`, ['monitors', 'incidents']);
+  const { data, error, loading, reload } = useResource<{ monitor: Monitor; checks: { ts: string; ok: number; status_code: number | null; latency_ms: number | null; dns_ms: number | null; error: string | null; attempts: number; manual: number; details: { display: string; success: boolean; error?: string }[] | null }[]; incidents: { id: number; title: string; status: string; started_at: string; resolved_at: string | null }[] }>(`/api/monitors/${id}?hours=${hours}`, ['monitors', 'incidents']);
   const [edit, setEdit] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -151,13 +162,15 @@ export function MonitorDetailPage({ id, isAdmin }: { id: number; isAdmin: boolea
         <Card title="Recent checks">
           <div className="table-wrap" style={{ maxHeight: 360 }}><table>
             <thead><tr><th>Time</th><th>Result</th><th className="num">Latency</th><th className="num">DNS</th></tr></thead>
-            <tbody>{data.checks.slice(0, 100).map((c, i) => <tr key={i}><td className="muted">{dateTime(c.ts)}{c.manual ? ' · manual' : ''}</td><td>{c.ok ? <Badge tone="good">HTTP {c.status_code}</Badge> : <Badge tone="critical">{c.error ?? `HTTP ${c.status_code}`}</Badge>}{c.attempts > 1 && <span className="muted" style={{ fontSize: 12 }}> · {c.attempts} attempts</span>}</td><td className="num">{ms(c.latency_ms)}</td><td className="num">{ms(c.dns_ms)}</td></tr>)}</tbody>
+            <tbody>{data.checks.slice(0, 100).map((c, i) => <tr key={i}><td className="muted">{dateTime(c.ts)}{c.manual ? ' · manual' : ''}</td><td>{c.ok ? <Badge tone="good">HTTP {c.status_code}</Badge> : <Badge tone="critical">{c.error ?? `HTTP ${c.status_code}`}</Badge>}{c.attempts > 1 && <span className="muted" style={{ fontSize: 12 }}> · {c.attempts} attempts</span>}{c.details && <ul style={{ margin: '4px 0 0', paddingLeft: 16, fontSize: 11.5 }}>{c.details.map((d, j) => <li key={j} style={{ color: d.success ? 'var(--text-secondary)' : 'var(--critical-text)' }}>{d.success ? '✓' : '✗'} <span className="mono">{d.display}</span>{d.error ? ` — ${d.error}` : ''}</li>)}</ul>}</td><td className="num">{ms(c.latency_ms)}</td><td className="num">{ms(c.dns_ms)}</td></tr>)}</tbody>
           </table></div>
         </Card>
         <Card title="Configuration & incidents">
           <dl className="dl">
             <dt>Interval</dt><dd>{m.interval_s}s</dd><dt>Timeout</dt><dd>{m.timeout_ms} ms</dd><dt>Expected status</dt><dd>{m.expected_status}</dd>
             <dt>Retries</dt><dd>{m.retries}</dd><dt>Incident after</dt><dd>{m.failure_threshold} consecutive failures</dd>
+            <dt>Resolve after</dt><dd>{m.success_threshold ?? 1} consecutive success(es)</dd>
+            <dt>Assertions</dt><dd>{parseConditions(m.conditions).length ? <ul style={{ margin: 0, paddingLeft: 16 }} className="mono">{parseConditions(m.conditions).map((c) => <li key={c}>{c}</li>)}</ul> : 'Status code only'}</dd>
           </dl>
           <div className="divider" style={{ margin: '14px 0' }} />
           {data.incidents.length ? data.incidents.map((i) => <div key={i.id} className="spread" style={{ padding: '4px 0' }}><Link to={`/incidents/${i.id}`}>#{i.id} {i.title}</Link><Badge tone={i.status === 'resolved' ? 'good' : 'critical'}>{i.status}</Badge></div>) : <p className="muted">No incidents for this monitor.</p>}
@@ -174,12 +187,13 @@ export function MonitorDetailPage({ id, isAdmin }: { id: number; isAdmin: boolea
 }
 
 function EditMonitor({ monitor: m, onClose }: { monitor: Monitor; onClose: () => void }) {
-  const [form, setForm] = useState({ name: m.name, url: m.url, method: m.method, intervalS: m.interval_s, timeoutMs: m.timeout_ms, expectedStatus: m.expected_status, retries: m.retries, failureThreshold: m.failure_threshold, latencyThresholdMs: m.latency_threshold_ms, enabled: !!m.enabled });
+  const [form, setForm] = useState({ name: m.name, url: m.url, method: m.method, intervalS: m.interval_s, timeoutMs: m.timeout_ms, expectedStatus: m.expected_status, retries: m.retries, failureThreshold: m.failure_threshold, latencyThresholdMs: m.latency_threshold_ms, enabled: !!m.enabled, successThreshold: m.success_threshold ?? 1 });
+  const [conditionsText, setConditionsText] = useState(parseConditions(m.conditions).join('\n'));
   const [err, setErr] = useState<string | null>(null);
   const set = (k: keyof typeof form, v: string | number | boolean) => setForm((f) => ({ ...f, [k]: v }));
   return (
     <Modal title="Edit monitor" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" form="edit-mon">Save</button></>}>
-      <form id="edit-mon" className="stack" onSubmit={async (e) => { e.preventDefault(); try { await api.put(`/api/monitors/${m.id}`, form); onClose(); } catch (er) { setErr((er as ApiError).message); } }}>
+      <form id="edit-mon" className="stack" onSubmit={async (e) => { e.preventDefault(); try { await api.put(`/api/monitors/${m.id}`, { ...form, conditions: conditionsText.split('\n').map((l) => l.trim()).filter(Boolean) }); onClose(); } catch (er) { setErr((er as ApiError).message); } }}>
         <div className="grid grid-2">
           <Field label="Name" htmlFor="e-name"><input id="e-name" className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
           <Field label="URL" htmlFor="e-url"><input id="e-url" className="input" value={form.url} onChange={(e) => set('url', e.target.value)} /></Field>
@@ -190,6 +204,10 @@ function EditMonitor({ monitor: m, onClose }: { monitor: Monitor; onClose: () =>
           <Field label="Open incident after N failures" htmlFor="e-thr"><input id="e-thr" type="number" min={1} max={10} className="input" value={form.failureThreshold} onChange={(e) => set('failureThreshold', Number(e.target.value))} /></Field>
           <Field label="Latency threshold (ms)" htmlFor="e-lat"><input id="e-lat" type="number" min={50} className="input" value={form.latencyThresholdMs} onChange={(e) => set('latencyThresholdMs', Number(e.target.value))} /></Field>
         </div>
+        <Field label="Resolve after N successful checks" htmlFor="e-succ" help="Avoids flapping incidents"><input id="e-succ" type="number" min={1} max={10} className="input" value={form.successThreshold} onChange={(e) => set('successThreshold', Number(e.target.value))} /></Field>
+        <Field label="Response assertions (one per line, all must pass)" htmlFor="e-cond" help={<>Examples: <code>[BODY].status == "ok"</code> · <code>[RESPONSE_TIME] &lt; 500ms</code> · <code>len([BODY].items) &gt; 0</code> · <code>[BODY] contains "healthy"</code> · <code>[CERT_EXPIRY] &gt; 14d</code></>}>
+          <textarea id="e-cond" className="input mono" rows={4} value={conditionsText} onChange={(e) => setConditionsText(e.target.value)} placeholder={'[STATUS] == 200\n[BODY].status == "ok"'} />
+        </Field>
         <label className="check"><input type="checkbox" checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} /> Enabled</label>
         {err && <Notice tone="error">{err}</Notice>}
       </form>
@@ -253,5 +271,125 @@ export function SiteScanPage({ id }: { id: number }) {
         </Card>
       </div>
     </>
+  );
+}
+
+interface Heartbeat {
+  id: number;
+  name: string;
+  token_prefix: string;
+  timeout_s: number;
+  grace_s: number;
+  status: string;
+  display_status: 'new' | 'up' | 'grace' | 'down' | 'paused';
+  last_ping_at: string | null;
+  last_duration_ms: number | null;
+  last_event: string | null;
+  down_at: string | null;
+  n_pings: number;
+}
+
+const HB_TONE: Record<Heartbeat['display_status'], Tone> = { new: 'unknown', up: 'good', grace: 'warning', down: 'critical', paused: 'unknown' };
+
+function every(seconds: number): string {
+  if (seconds % 86_400 === 0) return `${seconds / 86_400} d`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} h`;
+  return `${Math.round(seconds / 60)} min`;
+}
+
+/** Push monitors for cron jobs, backups and workers (they call us; we do not call them). */
+function HeartbeatsCard({ isAdmin }: { isAdmin: boolean }) {
+  const { data, reload } = useResource<{ heartbeats: Heartbeat[] }>('/api/heartbeats', ['monitors']);
+  const [creating, setCreating] = useState(false);
+  const [shown, setShown] = useState<{ name: string; url: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try {
+      await fn();
+      reload();
+    } catch (e) {
+      setErr((e as ApiError).message);
+    }
+  };
+  const examples = shown
+    ? [
+        '# Linux / macOS cron: ping after a successful run',
+        `0 2 * * * /usr/local/bin/backup.sh && curl -fsS -m 10 --retry 3 ${shown.url}`,
+        '',
+        '# Windows PowerShell (Task Scheduler)',
+        `Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 ${shown.url}`,
+        '',
+        '# Optional: measure duration and report the exit code',
+        `curl -fsS ${shown.url}/start ; ./job.sh ; curl -fsS ${shown.url}/$?`,
+      ].join('\n')
+    : '';
+  return (
+    <Card
+      title="Heartbeats (cron jobs, backups, workers)"
+      hint="Your job calls a secret URL when it succeeds; if no ping arrives in time, an incident opens"
+      actions={isAdmin && <button className="btn btn-sm" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> Add heartbeat</button>}
+    >
+      {err && <Notice tone="error">{err}</Notice>}
+      {!data ? <LoadingBlock /> : !data.heartbeats.length ? (
+        <p className="muted">No heartbeats yet. Use one for anything that runs on a schedule — a nightly backup, a cron job, a queue worker.</p>
+      ) : (
+        <div className="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Status</th><th className="hide-sm">Expected every</th><th>Last ping</th><th className="hide-sm">Last run</th>{isAdmin && <th />}</tr></thead>
+          <tbody>{data.heartbeats.map((h) => (
+            <tr key={h.id}>
+              <td><strong>{h.name}</strong><div className="muted mono" style={{ fontSize: 11.5 }}>/ping/{h.token_prefix}…</div></td>
+              <td><Badge tone={HB_TONE[h.display_status]}>{h.display_status}</Badge>{h.display_status === 'grace' && h.down_at && <div className="muted" style={{ fontSize: 11.5 }}>down {timeAgo(h.down_at)}</div>}</td>
+              <td className="hide-sm">{every(h.timeout_s)} + {every(h.grace_s)} grace</td>
+              <td>{h.last_ping_at ? timeAgo(h.last_ping_at) : 'never'}{h.last_event && h.last_event !== 'success' && <div className="muted" style={{ fontSize: 11.5 }}>{h.last_event}</div>}</td>
+              <td className="hide-sm">{h.last_duration_ms !== null ? ms(h.last_duration_ms) : '—'}</td>
+              {isAdmin && (
+                <td><div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  <button className="btn btn-sm" onClick={() => act(() => api.put(`/api/heartbeats/${h.id}`, { name: h.name, timeoutS: h.timeout_s, graceS: h.grace_s, paused: h.status !== 'paused' }))}>{h.status === 'paused' ? 'Resume' : 'Pause'}</button>
+                  <button className="btn btn-sm" title="Create a new secret URL (the old one stops working)" onClick={() => act(async () => { const r = await api.post<{ pingPath: string }>(`/api/heartbeats/${h.id}/rotate`); setShown({ name: h.name, url: `${window.location.origin}${r.pingPath}` }); })}>New URL</button>
+                  <button className="btn btn-sm btn-danger" aria-label={`Delete ${h.name}`} onClick={() => act(() => api.del(`/api/heartbeats/${h.id}`))}><Icon name="trash" size={13} /></button>
+                </div></td>
+              )}
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      {creating && <CreateHeartbeat onClose={() => setCreating(false)} onCreated={(name, url) => (setCreating(false), setShown({ name, url }), reload())} />}
+      {shown && (
+        <Modal title={`Ping URL for "${shown.name}"`} onClose={() => setShown(null)} wide footer={<button className="btn btn-primary" onClick={() => setShown(null)}>Done</button>}>
+          <Notice tone="warn">Copy it now — it is shown only once and stored only as a hash. Anyone with this URL can report this job as healthy.</Notice>
+          <pre className="log" style={{ padding: 12, whiteSpace: 'pre-wrap', userSelect: 'all' }}>{shown.url}</pre>
+          <div className="secondary" style={{ fontSize: 13 }}>Call it at the end of a successful run:</div>
+          <pre className="log" style={{ padding: 12, whiteSpace: 'pre-wrap' }}>{examples}</pre>
+        </Modal>
+      )}
+    </Card>
+  );
+}
+
+function CreateHeartbeat({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string, url: string) => void }) {
+  const [name, setName] = useState('');
+  const [timeoutS, setTimeoutS] = useState(86_400);
+  const [graceS, setGraceS] = useState(3600);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Modal title="Add heartbeat" onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" form="hb-form" disabled={!name.trim()}>Create</button></>}>
+      <form id="hb-form" className="stack" onSubmit={async (e) => { e.preventDefault(); try { const r = await api.post<{ pingPath: string }>('/api/heartbeats', { name, timeoutS, graceS }); onCreated(name, `${window.location.origin}${r.pingPath}`); } catch (er) { setErr((er as ApiError).message); } }}>
+        <Field label="Name" htmlFor="hb-name"><input id="hb-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nightly database backup" autoFocus /></Field>
+        <div className="grid grid-2">
+          <Field label="Expected every" htmlFor="hb-timeout">
+            <select id="hb-timeout" className="input" value={timeoutS} onChange={(e) => setTimeoutS(Number(e.target.value))}>
+              {[300, 900, 3600, 6 * 3600, 12 * 3600, 86_400, 7 * 86_400].map((s) => <option key={s} value={s}>{every(s)}</option>)}
+            </select>
+          </Field>
+          <Field label="Grace period" htmlFor="hb-grace" help="Extra time before it counts as down">
+            <select id="hb-grace" className="input" value={graceS} onChange={(e) => setGraceS(Number(e.target.value))}>
+              {[60, 300, 900, 3600, 6 * 3600].map((s) => <option key={s} value={s}>{every(s)}</option>)}
+            </select>
+          </Field>
+        </div>
+        {err && <Notice tone="error">{err}</Notice>}
+      </form>
+    </Modal>
   );
 }

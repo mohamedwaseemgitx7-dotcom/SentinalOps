@@ -22,17 +22,29 @@ export interface SessionInfo {
 
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])$/i;
 const LOCKOUT_THRESHOLD = 5;
+/** SentinelOps is a personal/small-team tool: never more than this many accounts. */
+export const MAX_USERS_CEILING = 3;
 const SETUP_TOKEN_KEY = 'auth.setup_token_hash';
 
 export class AuthService {
   private db: DB;
   private dataDir: string;
   private sessionTtlHours: number;
+  readonly maxUsers: number;
 
-  constructor(db: DB, dataDir: string, sessionTtlHours: number) {
+  constructor(db: DB, dataDir: string, sessionTtlHours: number, maxUsers = MAX_USERS_CEILING) {
     this.db = db;
     this.dataDir = dataDir;
     this.sessionTtlHours = sessionTtlHours;
+    // Configurable downwards only; the ceiling is fixed.
+    this.maxUsers = Math.max(1, Math.min(MAX_USERS_CEILING, Math.floor(maxUsers)));
+  }
+
+  /** Accounts plus unexpired, unused invitations — invitations reserve a seat. */
+  seatsUsed(): { users: number; pendingInvites: number } {
+    const users = this.userCount();
+    const pendingInvites = (this.db.prepare('SELECT COUNT(*) AS n FROM invites WHERE used_at IS NULL AND expires_at > ?').get(now()) as { n: number }).n;
+    return { users, pendingInvites };
   }
 
   userCount(): number {
@@ -84,6 +96,7 @@ export class AuthService {
     if (!USERNAME_RE.test(username)) throw badRequest('Username must be 3–32 characters: letters, digits, dot, dash or underscore.');
     const problems = passwordProblems(password, username);
     if (problems.length) throw badRequest(problems.join(' '));
+    if (this.userCount() >= this.maxUsers) throw forbidden(`This SentinelOps instance is limited to ${this.maxUsers} accounts.`);
     const exists = this.db.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
     if (exists) throw conflict('That username is taken.');
     const hash = await hashPassword(password);
@@ -179,6 +192,10 @@ export class AuthService {
   }
 
   createInvite(createdBy: number, role: Role, ttlHours = 24): string {
+    const { users, pendingInvites } = this.seatsUsed();
+    if (users + pendingInvites >= this.maxUsers) {
+      throw forbidden(`All ${this.maxUsers} seats are taken (${users} account(s), ${pendingInvites} pending invitation(s)). Remove a user or wait for an invitation to expire.`);
+    }
     const token = randomToken(24);
     this.db
       .prepare('INSERT INTO invites (token_hash, role, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')

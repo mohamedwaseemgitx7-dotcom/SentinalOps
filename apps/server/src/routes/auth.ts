@@ -80,7 +80,7 @@ export function authRoutes(app: FastifyInstance, ctx: AppContext): void {
   });
 
   // --- User administration (admin only) ---
-  app.get('/api/users', { config: { adminOnly: true } }, async () => ({ users: ctx.auth.listUsers() }));
+  app.get('/api/users', { config: { adminOnly: true } }, async () => ({ users: ctx.auth.listUsers(), maxUsers: ctx.auth.maxUsers, seats: ctx.auth.seatsUsed() }));
 
   app.post('/api/users/invites', async (req) => {
     const s = requireSession(req);

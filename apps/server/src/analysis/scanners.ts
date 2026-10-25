@@ -7,6 +7,16 @@ import { redactSecret, type Finding, type Severity } from './rules.ts';
 
 const execFileP = promisify(execFile);
 
+// Project-local tool folder (checksum-verified binaries, see docs/INSTALLATION-LOG.md); falls back to PATH.
+const repoRoot = path.resolve(import.meta.dirname, '..', '..', '..', '..');
+const TOOLS_DIR = process.env.SENTINELOPS_TOOLS_DIR ?? path.join(repoRoot, '.tools');
+const TRIVY_CACHE = process.env.TRIVY_CACHE_DIR ?? path.join(repoRoot, '.cache', 'trivy');
+
+function bin(name: string): string {
+  const local = path.join(TOOLS_DIR, process.platform === 'win32' ? `${name}.exe` : name);
+  return fs.existsSync(local) ? local : name;
+}
+
 export interface ScannerStatus {
   name: string;
   available: boolean;
@@ -23,7 +33,7 @@ async function version(bin: string, args: string[]): Promise<string | null> {
 }
 
 export async function detectScanners(): Promise<ScannerStatus[]> {
-  const [gitleaks, trivy, semgrep] = await Promise.all([version('gitleaks', ['version']), version('trivy', ['--version']), version('semgrep', ['--version'])]);
+  const [gitleaks, trivy, semgrep] = await Promise.all([version(bin('gitleaks'), ['version']), version(bin('trivy'), ['--version']), version(bin('semgrep'), ['--version'])]);
   return [
     { name: 'gitleaks', available: !!gitleaks, version: gitleaks },
     { name: 'trivy', available: !!trivy, version: trivy },
@@ -35,12 +45,14 @@ export async function detectScanners(): Promise<ScannerStatus[]> {
 export async function runGitleaks(root: string): Promise<Finding[]> {
   const report = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'so-gl-')), 'report.json');
   try {
-    await execFileP('gitleaks', ['detect', '--no-git', '--redact', '--source', root, '--report-format', 'json', '--report-path', report, '--exit-code', '0'], {
+    // Git repositories: scan tracked history (skips untracked node_modules/build output). Otherwise scan the folder.
+    const mode = fs.existsSync(path.join(root, '.git')) ? ['git', root] : ['dir', root];
+    await execFileP(bin('gitleaks'), [...mode, '--redact', '--report-format', 'json', '--report-path', report, '--exit-code', '0', '--no-banner'], {
       timeout: 120_000, windowsHide: true, maxBuffer: 16 * 1024 * 1024,
     });
     const items = JSON.parse(fs.readFileSync(report, 'utf8')) as { RuleID: string; Description: string; File: string; StartLine: number; Fingerprint: string; Match: string }[];
     return items.map((i) => {
-      const rel = path.relative(root, i.File).split(path.sep).join('/');
+      const rel = (path.isAbsolute(i.File) ? path.relative(root, i.File) : i.File).split(path.sep).join('/');
       return {
         ruleId: `gitleaks:${i.RuleID}`, source: 'gitleaks', severity: 'high' as Severity, title: i.Description, file: rel, line: i.StartLine,
         evidence: i.Match.includes('REDACTED') ? i.Match.slice(0, 200) : redactSecret(i.Match),
@@ -57,8 +69,11 @@ export async function runGitleaks(root: string): Promise<Finding[]> {
 const TRIVY_SEV: Record<string, Severity> = { CRITICAL: 'critical', HIGH: 'high', MEDIUM: 'medium', LOW: 'low', UNKNOWN: 'info' };
 
 export async function runTrivy(root: string): Promise<Finding[]> {
-  const { stdout } = await execFileP('trivy', ['fs', '--quiet', '--format', 'json', '--scanners', 'vuln,misconfig', root], {
-    timeout: 300_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
+  fs.mkdirSync(path.join(TRIVY_CACHE, 'docker-config'), { recursive: true });
+  const { stdout } = await execFileP(bin('trivy'), ['fs', '--quiet', '--format', 'json', '--scanners', 'vuln,misconfig', '--cache-dir', TRIVY_CACHE, '--skip-dirs', 'node_modules', '--skip-dirs', '.cache', '--skip-dirs', '.tools', root], {
+    timeout: 600_000, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
+    // Isolated Docker config: a stale credential helper in ~/.docker would break anonymous DB downloads.
+    env: { ...process.env, DOCKER_CONFIG: path.join(TRIVY_CACHE, 'docker-config') },
   });
   const report = JSON.parse(stdout) as {
     Results?: {

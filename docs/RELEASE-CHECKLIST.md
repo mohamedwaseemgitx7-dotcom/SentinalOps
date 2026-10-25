@@ -1,9 +1,9 @@
-# Release checklist — v0.1.0
+# Release checklist — v0.2.0
 
 | Gate | Status | Evidence |
 |---|---|---|
 | Typecheck (server + web) | ✅ | `npm run typecheck` |
-| Unit/API/security tests | ✅ 53 passed | `npm test` |
+| Unit/API/security tests | ✅ 88 passed | `npm test` |
 | E2E desktop + mobile | ✅ 7 passed (3 skipped by design) | `npx playwright test` |
 | `npm audit --audit-level=high` | ✅ 0 vulnerabilities | 2026-10-25 |
 | Secret scan of this repository | ✅ no secrets (self-analysis; gitleaks in CI) | SentinelOps self-analysis |

@@ -20,6 +20,8 @@ export interface AppConfig {
   authRateLimitPerMin: number;
   /** API requests per session (or per IP when anonymous) per minute. */
   apiRateLimitPerMin: number;
+  /** Maximum number of accounts (1–3; 3 is a hard ceiling). */
+  maxUsers: number;
 }
 
 function bool(v: string | undefined, fallback: boolean): boolean {
@@ -44,6 +46,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     dbFile: env.SENTINELOPS_DB_FILE ?? 'sentinelops.db',
     authRateLimitPerMin: Number(env.SENTINELOPS_AUTH_RATE_LIMIT ?? 10),
     apiRateLimitPerMin: Number(env.SENTINELOPS_API_RATE_LIMIT ?? 600),
+    maxUsers: Number(env.SENTINELOPS_MAX_USERS ?? 3),
     ...overrides,
   };
 }

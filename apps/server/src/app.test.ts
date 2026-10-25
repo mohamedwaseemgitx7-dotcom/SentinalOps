@@ -334,3 +334,38 @@ describe('load test runner', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }, 30_000);
 });
+
+describe('account limit (maximum 3 users)', () => {
+  it('caps accounts at 3 including pending invitations, even if configured higher', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'so-seats-'));
+    const built = await buildApp(loadConfig({ dataDir: dir, dbFile: ':memory:', enableScheduler: false, logLevel: 'silent', webDir: null, githubToken: null, maxUsers: 10, authRateLimitPerMin: 100 }));
+    const a = built.app;
+    expect(built.ctx.auth.maxUsers).toBe(3);
+    const setup = await a.inject({ method: 'POST', url: '/api/auth/setup', payload: { token: built.setup!.token, username: 'owner', password: PASSWORD } });
+    const headers = { cookie: cookieFrom(setup), 'x-csrf-token': setup.json().csrfToken as string };
+    const invite = async () => a.inject({ method: 'POST', url: '/api/users/invites', headers, payload: { role: 'viewer' } });
+    const i1 = await invite();
+    const i2 = await invite();
+    expect(i1.statusCode).toBe(200);
+    expect(i2.statusCode).toBe(200);
+    // Owner + 2 pending invitations = 3 seats: no further invitations.
+    const i3 = await invite();
+    expect(i3.statusCode).toBe(403);
+    expect(i3.json().message).toMatch(/All 3 seats are taken/);
+    for (const [i, res] of [i1, i2].entries()) {
+      const ok = await a.inject({ method: 'POST', url: '/api/auth/accept-invite', payload: { token: res.json().token, username: `member${i}`, password: PASSWORD } });
+      expect(ok.statusCode).toBe(200);
+    }
+    const users = await a.inject({ url: '/api/users', headers });
+    expect(users.json().users).toHaveLength(3);
+    expect(users.json().maxUsers).toBe(3);
+    // Even a direct service call cannot create a 4th account.
+    await expect(built.ctx.auth.createUser('fourth', PASSWORD, 'viewer')).rejects.toThrow(/limited to 3 accounts/);
+    // Removing a user frees a seat.
+    const memberId = (users.json().users as { id: number; username: string }[]).find((u) => u.username === 'member0')!.id;
+    expect((await a.inject({ method: 'DELETE', url: `/api/users/${memberId}`, headers })).statusCode).toBe(200);
+    expect((await invite()).statusCode).toBe(200);
+    await a.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

@@ -38,3 +38,27 @@ Self-tests: 46 passed, 7 failed, 12 skipped. The failures are by design on Windo
 ## Playwright
 
 Uses the locally installed Google Chrome (`channel: 'chrome'`) — no browser download. CI installs Chromium in the runner.
+
+## v0.2.0 additions (2026-10-25)
+
+### Skills (found with the official `skills` CLI)
+
+`npx skills@1.7.2 find <query>` (vercel-labs/skills, MIT; version ≥ 14 days old; no install-time scripts) searched skills.sh. Each chosen skill's repository was cloned to a scratch folder, its files listed and scanned for risky instructions (download-and-execute, credential/keychain access, disabling security tools, prompt-injection phrasing — none found), then copied **project-scoped** into `.claude/skills/` with its LICENSE and a `SOURCE.txt` pinning the commit.
+
+| Skill | Source @ commit | Purpose |
+|---|---|---|
+| find-skills | vercel-labs/skills @ a80e4c9 (MIT) | discover skills |
+| dispatching-parallel-agents | obra/superpowers @ 2ce8aa1 (MIT) | multi-agent method (used for the three tool analyses) |
+| reverse-engineer-anything | morluto/rea @ bb17e90 (MIT) | guidance only; its REA engine was **not** installed (binary-focused) |
+| improve-codebase-architecture | mattpocock/skills @ 5beb35b (MIT) | architecture review guidance |
+
+**Excluded on purpose:** `anti-detect-browser`, `multi-account-isolation`, `anti-reversing-techniques` (detection evasion / anti-analysis). Remove any skill by deleting its folder under `.claude/skills/`.
+
+### Security tools (project-local; no PATH or system changes)
+
+| Tool | Version | Verification | Location |
+|---|---|---|---|
+| Gitleaks | 8.30.1 | SHA-256 matched the release `checksums.txt` | `D:\dmonitz\.tools\gitleaks.exe` |
+| Trivy | 0.75.0 (2026-10-01) | SHA-256 matched; GitHub **immutable release**; newer than all patched advisories (GHSA-mcj4-mphf-j9ff, GHSA-8rc5-4fr6-64pw, GHSA-q3fv-x8vg-qqm4); outside the March 2026 compromise (GHSA-69fq-xp46-6x23 affected v0.69.4) | `D:\dmonitz\.tools\trivy.exe`; DB cache `D:\dmonitz\.cache\trivy` (1.6 GB) |
+
+Trivy runs with an isolated, empty `DOCKER_CONFIG` because `~/.docker/config.json` references a missing Docker Desktop credential helper; the user's Docker config was not modified. Semgrep was not installed (needs a system-wide Python install). Remove with `.tools` and `.cache/trivy`.

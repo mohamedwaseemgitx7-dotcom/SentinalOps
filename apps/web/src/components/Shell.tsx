@@ -224,7 +224,7 @@ export function Shell({ user, onLogout, children }: { user: SessionUser; onLogou
           <div className="row" style={{ gap: 6 }}>
             <span className={`live ${connected ? '' : 'off'}`}><span className="pulse" />{connected ? 'Live' : 'Reconnecting'}</span>
           </div>
-          <div style={{ marginTop: 8 }}>v0.1.0 · local-first</div>
+          <div style={{ marginTop: 8 }}>v0.2.0 · local-first</div>
         </div>
       </aside>
       <div className="main">

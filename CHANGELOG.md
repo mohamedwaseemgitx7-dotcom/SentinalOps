@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0 — 2026-10-25
+
+### Added
+- Response assertions on monitors with per-assertion results (design informed by Gatus and Uptime Kuma).
+- Recovery hysteresis: resolve incidents only after N consecutive successes.
+- Heartbeat (push) monitors for cron jobs, backups and workers (design informed by Healthchecks and Uptime Kuma).
+- Webhook notification channels: encryption at rest, SSRF protection, outbox and retries.
+- Maximum of 3 user accounts, with seat usage in Settings.
+- Project-local Gitleaks 8.30.1 and Trivy 0.75.0 (checksum-verified) used for local repository analysis.
+- Project skills: find-skills, dispatching-parallel-agents, reverse-engineer-anything, improve-codebase-architecture.
+
+### Fixed
+- `npm start` on a fresh checkout (builds first); added `Start-SentinelOps.cmd`.
+- Notification test reported "pending" because concurrent drains returned early.
+- Gitleaks used the deprecated `detect` command; Trivy failed when `~/.docker` referenced a missing credential helper.
+
 ## 0.1.0 — 2026-10-25
 
 First working release (local-first).

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Badge, Card, DataSourceNote, ErrorState, Field, LoadingBlock, Notice } from '../components/ui';
 import type { SessionUser } from '../components/Shell';
+import { Icon } from '../components/icons';
 import { api, ApiError } from '../lib/api';
 import { dateTime, timeAgo } from '../lib/format';
 import { useResource } from '../lib/live';
@@ -84,6 +85,7 @@ export function SettingsPage({ user }: { user: SessionUser }) {
           )}
         </Card>
       </div>
+      {isAdmin && <ChannelsCard />}
       {isAdmin && <Users me={user} />}
       {isAdmin && <AuditLog />}
     </>
@@ -120,12 +122,14 @@ function ChangePassword() {
 }
 
 function Users({ me }: { me: SessionUser }) {
-  const { data, reload } = useResource<{ users: { id: number; username: string; role: string; created_at: string; last_login_at: string | null }[] }>('/api/users');
+  const { data, reload } = useResource<{ users: { id: number; username: string; role: string; created_at: string; last_login_at: string | null }[]; maxUsers: number; seats: { users: number; pendingInvites: number } }>('/api/users');
+  const seatsTaken = data ? data.seats.users + data.seats.pendingInvites : 0;
+  const full = !!data && seatsTaken >= data.maxUsers;
   const [role, setRole] = useState('viewer');
   const [link, setLink] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
-    <Card title="Users" hint="Viewers can read everything but cannot change anything">
+    <Card title="Users" hint={data ? `${seatsTaken} of ${data.maxUsers} seats used (${data.seats.pendingInvites} pending invitation${data.seats.pendingInvites === 1 ? '' : 's'}) · viewers are read-only` : 'Viewers are read-only'}>
       {err && <Notice tone="error">{err}</Notice>}
       <div className="table-wrap"><table>
         <thead><tr><th>User</th><th>Role</th><th>Created</th><th>Last sign-in</th><th /></tr></thead>
@@ -137,7 +141,8 @@ function Users({ me }: { me: SessionUser }) {
       <div className="row" style={{ marginTop: 14 }}>
         <label htmlFor="inv-role" className="secondary">Invite a</label>
         <select id="inv-role" className="input" style={{ width: 140 }} value={role} onChange={(e) => setRole(e.target.value)}><option value="viewer">viewer</option><option value="admin">administrator</option></select>
-        <button className="btn" onClick={async () => { const r = await api.post<{ token: string }>('/api/users/invites', { role }); setLink(`${window.location.origin}/invite?token=${encodeURIComponent(r.token)}`); }}>Create invitation link</button>
+        <button className="btn" disabled={full} onClick={async () => { setErr(null); try { const r = await api.post<{ token: string }>('/api/users/invites', { role }); setLink(`${window.location.origin}/invite?token=${encodeURIComponent(r.token)}`); reload(); } catch (e) { setErr((e as ApiError).message); } }}>Create invitation link</button>
+        {full && <span className="muted" style={{ fontSize: 12 }}>All seats are in use — SentinelOps allows at most 3 accounts.</span>}
       </div>
       {link && <Notice tone="info">Single-use link, valid 24 hours. Share it privately: <code style={{ overflowWrap: 'anywhere' }}>{link}</code></Notice>}
     </Card>
@@ -154,6 +159,76 @@ function AuditLog() {
           <tbody>{data.entries.map((e) => <tr key={e.id}><td className="muted">{dateTime(e.ts)}</td><td>{e.username ?? '—'}</td><td className="mono">{e.action}</td><td className="truncate" style={{ maxWidth: 200 }}>{e.target ?? ''}</td><td className="hide-sm secondary truncate" style={{ maxWidth: 260 }}>{e.detail ?? ''}</td><td className="hide-sm mono">{e.ip}</td></tr>)}</tbody>
         </table></div>
       )}
+    </Card>
+  );
+}
+
+interface Channel {
+  id: number;
+  name: string;
+  target_hint: string;
+  allow_private: number;
+  enabled: number;
+  last_sent_at: string | null;
+  last_error: string | null;
+}
+
+/** Incident alerts to Slack, Discord, ntfy, Teams-compatible or any JSON webhook. */
+function ChannelsCard() {
+  const { data, reload } = useResource<{ channels: Channel[]; recent: { id: number; event: string; status: string; attempts: number; error: string | null; created_at: string; channel: string }[] }>('/api/channels');
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [allowPrivate, setAllowPrivate] = useState(false);
+  const [msg, setMsg] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
+  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+    setMsg(null);
+    try {
+      await fn();
+      if (ok) setMsg({ tone: 'info', text: ok });
+      reload();
+    } catch (e) {
+      setMsg({ tone: 'error', text: (e as ApiError).message });
+    }
+  };
+  return (
+    <Card title="Notification channels" id="channels" hint="Sent when an incident opens or resolves">
+      <div className="stack">
+        {data?.channels.length ? (
+          <div className="table-wrap"><table>
+            <thead><tr><th>Channel</th><th>Target</th><th>Status</th><th /></tr></thead>
+            <tbody>{data.channels.map((c) => (
+              <tr key={c.id}>
+                <td>{c.name}{c.allow_private ? <div className="muted" style={{ fontSize: 11.5 }}>private network allowed</div> : null}</td>
+                <td className="mono">{c.target_hint}</td>
+                <td>{!c.enabled ? <Badge tone="unknown">disabled</Badge> : c.last_error ? <Badge tone="critical">error</Badge> : c.last_sent_at ? <Badge tone="good">sent {timeAgo(c.last_sent_at)}</Badge> : <Badge tone="unknown">not used yet</Badge>}{c.last_error && <div style={{ color: 'var(--critical-text)', fontSize: 11.5 }}>{c.last_error}</div>}</td>
+                <td><div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  <button className="btn btn-sm" onClick={() => act(async () => { const r = await api.post<{ status: string; error: string | null }>(`/api/channels/${c.id}/test`); if (r.status !== 'sent') throw new Error(`Test not delivered: ${r.error ?? r.status}`); }, `Test message delivered to "${c.name}".`)}>Test</button>
+                  <button className="btn btn-sm" onClick={() => act(() => api.put(`/api/channels/${c.id}`, { enabled: !c.enabled }))}>{c.enabled ? 'Disable' : 'Enable'}</button>
+                  <button className="btn btn-sm btn-danger" aria-label={`Delete ${c.name}`} onClick={() => act(() => api.del(`/api/channels/${c.id}`))}><Icon name="trash" size={13} /></button>
+                </div></td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        ) : <p className="muted">No channels yet. Add a webhook to get incident alerts on your phone (e.g. a Discord or Slack webhook, or an ntfy.sh topic URL).</p>}
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); void act(async () => { await api.post('/api/channels', { name, url, allowPrivate }); setName(''); setUrl(''); setAllowPrivate(false); }, 'Channel added — use Test to verify it.'); }}>
+          <div className="grid grid-2">
+            <Field label="Name" htmlFor="ch-name"><input id="ch-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="My phone (ntfy)" required /></Field>
+            <Field label="Webhook URL" htmlFor="ch-url" help="Stored encrypted; only the host is shown afterwards"><input id="ch-url" className="input" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://ntfy.sh/your-secret-topic" required /></Field>
+          </div>
+          <label className="check"><input type="checkbox" checked={allowPrivate} onChange={(e) => setAllowPrivate(e.target.checked)} /> <span>Allow private-network targets (e.g. a self-hosted ntfy on your LAN). <span className="muted">Off by default to prevent requests to internal services.</span></span></label>
+          <div><button className="btn" disabled={!name.trim() || !url.trim()}>Add channel</button></div>
+        </form>
+        {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+        {data?.recent.length ? (
+          <details>
+            <summary className="secondary" style={{ cursor: 'pointer', fontSize: 13 }}>Recent deliveries</summary>
+            <div className="table-wrap" style={{ marginTop: 8 }}><table>
+              <tbody>{data.recent.map((n) => <tr key={n.id}><td className="muted">{timeAgo(n.created_at)}</td><td>{n.channel}</td><td className="mono">{n.event}</td><td><Badge tone={n.status === 'sent' ? 'good' : n.status === 'failed' ? 'critical' : 'warning'}>{n.status}</Badge></td><td className="secondary">{n.error ?? ''}</td></tr>)}</tbody>
+            </table></div>
+          </details>
+        ) : null}
+        <DataSourceNote>Payload: JSON with <code>event</code>, <code>incident</code> and a <code>text</code>/<code>content</code> summary, so Slack, Discord and ntfy display it directly. Redirects are not followed; failed deliveries retry twice.</DataSourceNote>
+      </div>
     </Card>
   );
 }

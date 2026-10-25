@@ -29,7 +29,7 @@
 
 ## Results (2026-10-25)
 
-- `npm test`: **53 passed** (locally ×3 and on GitHub CI).
+- `npm test`: **88 passed** (v0.2.0).
 - `npx playwright test`: **7 passed**, 3 skipped by design (desktop-only steps).
 - Desktop: dev, packaged and portable builds launched and rendered (screenshots in `artifacts/screenshots`).
 

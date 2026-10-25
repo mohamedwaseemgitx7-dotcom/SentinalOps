@@ -19,13 +19,17 @@ import { safeEqual, sha256 } from './lib/crypto.ts';
 import { HttpError } from './lib/errors.ts';
 import { EventBus } from './lib/events.ts';
 import { LoadTestRunner } from './loadtest/runner.ts';
+import { HeartbeatService } from './monitoring/heartbeats.ts';
 import { MonitorScheduler } from './monitoring/scheduler.ts';
+import { Notifier } from './notifications.ts';
+import { SecretBox } from './lib/secretbox.ts';
+import { heartbeatRoutes } from './routes/heartbeats.ts';
 import { authRoutes, SESSION_COOKIE } from './routes/auth.ts';
 import { opsRoutes } from './routes/ops.ts';
 import { repoRoutes } from './routes/repos.ts';
 import { systemRoutes } from './routes/system.ts';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -43,14 +47,19 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export async function buildApp(config: AppConfig): Promise<{ app: FastifyInstance; ctx: AppContext; setup: { token: string; file: string } | null }> {
   const db = openDb(config.dataDir, config.dbFile);
   const bus = new EventBus(db);
-  const auth = new AuthService(db, config.dataDir, config.sessionTtlHours);
+  const auth = new AuthService(db, config.dataDir, config.sessionTtlHours, config.maxUsers);
   const gh = new GitHubClient(db, config.githubToken);
   const incidents = new IncidentService(db, bus);
+  const notifier = new Notifier(db, new SecretBox(config.dataDir), bus);
+  incidents.setNotifier(notifier);
+  const heartbeats = new HeartbeatService(db, bus, incidents);
+  const scheduler = new MonitorScheduler(db, bus, incidents);
+  scheduler.attach(heartbeats, notifier);
   const ctx: AppContext = {
     config, db, bus, auth, gh, incidents,
     analyzer: new Analyzer(db, gh, bus, incidents),
     pipelines: new PipelineService(db, gh, bus, incidents),
-    scheduler: new MonitorScheduler(db, bus, incidents),
+    scheduler, heartbeats, notifier,
     loadTests: new LoadTestRunner(db, bus),
     startedAt: now(),
     version: VERSION,
@@ -136,6 +145,7 @@ export async function buildApp(config: AppConfig): Promise<{ app: FastifyInstanc
   repoRoutes(app, ctx);
   opsRoutes(app, ctx);
   systemRoutes(app, ctx);
+  heartbeatRoutes(app, ctx);
 
   const webDir = config.webDir && fs.existsSync(path.join(config.webDir, 'index.html')) ? config.webDir : null;
   const indexHtml = webDir ? fs.readFileSync(path.join(webDir, 'index.html')) : null;
@@ -166,6 +176,7 @@ export async function buildApp(config: AppConfig): Promise<{ app: FastifyInstanc
     clearInterval(housekeeping);
     ctx.scheduler.stop();
     ctx.loadTests.stop();
+    await ctx.notifier.idle();
     db.close();
   });
   return { app, ctx, setup };

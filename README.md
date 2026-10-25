@@ -9,7 +9,7 @@ SentinelOps analyses GitHub repositories and local working copies, diagnoses fai
 | Web app | React + Vite, responsive (phone → desktop), dark/light themes |
 | Server | Node.js 24, Fastify, built-in `node:sqlite` (no external database) |
 | Desktop | Windows `.exe` (Electron) running the server in-process on `127.0.0.1` |
-| Auth | First-run setup token → admin account; scrypt passwords; HttpOnly SameSite=Strict sessions; CSRF; roles (admin / read-only viewer) |
+| Auth | First-run setup token → admin account; scrypt passwords; HttpOnly SameSite=Strict sessions; CSRF; roles (admin / read-only viewer); **at most 3 accounts** (invitations reserve a seat) |
 | Cost | ₹0 — runs locally; no paid services required |
 
 ## Features
@@ -19,6 +19,10 @@ SentinelOps analyses GitHub repositories and local working copies, diagnoses fai
 - **PR Gatekeeper** — pass / warn / block per rule (CI checks, secrets in added lines, risky workflow/Docker/Terraform changes, dependency changes, missing tests, breaking-change heuristics, size). Never executes PR code; posting a PR comment is opt-in and confirmed each time.
 - **Security Intelligence** — secret patterns (redacted, never stored), GitHub Actions hardening (unpinned actions, script injection, `pull_request_target` checkouts, token permissions), Dockerfile and IaC rules, OSV.dev advisories, Dependabot alerts, and Gitleaks/Trivy when installed. Suppressions require a written justification and are audited.
 - **Live monitoring** — scheduled HTTP checks (≥ 60 s), retries, thresholds, TLS expiry, incidents with recovery verification; one-off public website scans (headers, TLS, DNS, redirects, cookies, technology indicators).
+- **Response assertions** — e.g. `[BODY].status == "ok"`, `[RESPONSE_TIME] < 500ms`, `len([BODY].items) > 0`, `[HEADER].content-type matches "application/json*"`, `[CERT_EXPIRY] > 14d`; every check shows each assertion with its actual value. No `eval`, globs instead of regex, and anything incomparable *fails* rather than passing.
+- **Recovery hysteresis** — open after N failures, auto-resolve only after M consecutive successes.
+- **Heartbeat (push) monitors** — for cron jobs, backups and workers: the job calls a secret `/ping/<token>` URL (`/start`, `/fail`, `/<exit-code>` supported); if no ping arrives within timeout + grace, an incident opens. Tokens are stored only as SHA-256 hashes; pings are rate-limited.
+- **Notifications** — incident opened/resolved alerts to any JSON webhook (Slack, Discord, ntfy…), stored AES-256-GCM-encrypted, delivered with SSRF protection (private networks blocked by default, connection pinned to the validated IP, no redirects) and retries.
 - **Incidents** — automatic from monitors, failing default-branch workflows and critical findings; acknowledge, notes, resolve; measured time-to-detect and time-to-recover.
 - **System Health Pulse** — weighted score from measured inputs only; withheld below 50 % input coverage. See [docs/HEALTH-SCORE.md](docs/HEALTH-SCORE.md).
 - **Analytics** — CI success rate, build duration avg/p95, failure categories, MTTR/MTTD, deployment frequency and change-failure rate (heuristic, labelled), availability/latency, security trends, CSV export (formula-injection safe).
