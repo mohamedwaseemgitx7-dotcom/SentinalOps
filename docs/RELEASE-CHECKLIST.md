@@ -9,7 +9,7 @@
 | Secret scan of this repository | ✅ no secrets (self-analysis; gitleaks in CI) | SentinelOps self-analysis |
 | Own critical/high findings | ✅ none open after false-positive fixes | self-analysis |
 | Access control tests | ✅ | `app.test.ts` |
-| Desktop exe launches | ✅ dev, packaged, portable | `artifacts/screenshots/desktop-*.png` |
+| Desktop exe launches | ✅ dev, packaged, portable, and installed copy (`D:\SentinelOps`) | `artifacts/screenshots/desktop-*.png` |
 | Defender scan of binaries | ✅ no threats | MpCmdRun |
 | Code signing | ❌ not signed (no certificate; ₹0) | documented |
 | LICENSE | ✅ MIT | `LICENSE` |
@@ -17,13 +17,12 @@
 | CI on GitHub | ✅ all 4 jobs green (run 40125080435) | build/test, e2e, gitleaks (full history), container build + smoke |
 | Branch protection | ✅ `main` requires the 4 CI checks; no force-push/deletion | GitHub settings |
 
-## Artifacts (built 2026-10-25, unsigned)
+## Artifacts (rebuilt 2026-10-25 06:12 from the latest code, unsigned, Defender: no threats)
 
 | File | Size | SHA-256 |
 |---|---:|---|
-| `SentinelOps-0.1.0-x64-setup.exe` | 121,177,819 B | `06638C6C2389809D6BEF687B6266FE6BAD09B85E98477DA0F0B13CF6CF0A971B` |
-| `SentinelOps-0.1.0-portable.exe` | 120,933,936 B | `B9767C2F086A031B3ECC8BCC0527F2E8BD1AF3C9C857F60439B2DE1639E5C5E1` |
-| `win-unpacked/SentinelOps.exe` | — | `63E81FDF48276685550D89FD244D37CD01B8D64F3B44DBD1749F161B91B9D740` |
+| `SentinelOps-0.1.0-x64-setup.exe` | 121,178,183 B | `7647741B7DF26F576FD7CD8D5D295828554C0B76199D9E8C6694AD946DE99A15` |
+| `SentinelOps-0.1.0-portable.exe` | 120,934,234 B | `6FB9C00F95D5A525265F4F9E062CFDE0E9B4B08CF3B9B06FA4BEE74468EE2EF1` |
 
 Verify: `Get-FileHash .\SentinelOps-0.1.0-x64-setup.exe -Algorithm SHA256`.
 

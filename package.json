@@ -14,11 +14,12 @@
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"npm run dev -w @sentinelops/server\" \"npm run dev -w @sentinelops/web\"",
     "build": "npm run build -w @sentinelops/server && npm run build -w @sentinelops/web",
-    "start": "npm run start -w @sentinelops/server",
+    "start": "npm run build && npm run start -w @sentinelops/server",
     "typecheck": "npm run typecheck -w @sentinelops/server && npm run typecheck -w @sentinelops/web",
     "test": "npm run test -w @sentinelops/server",
     "test:e2e": "playwright test",
-    "desktop:build": "npm run build && npm run dist -w @sentinelops/desktop"
+    "desktop:build": "npm run build && npm run dist -w @sentinelops/desktop",
+    "start:fast": "npm run start -w @sentinelops/server"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",

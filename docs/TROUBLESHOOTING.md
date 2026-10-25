@@ -2,6 +2,7 @@
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| `npm start` fails with "Cannot find module …\dist\index.js" (fixed) | Older start script needed a separate build | `npm start` now builds first; or double-click `Start-SentinelOps.cmd`. |
 | Setup screen asks for a token | First run; no admin exists | Copy the token printed in the server console or from `data/setup-token.txt` (desktop: click **Fill**). |
 | Lost the setup token | Server restarted before setup | Restart: a new token is generated while no user exists. |
 | "Too many failed attempts" | Account lockout after 5 failures | Wait (1–60 min, exponential). Locks reset after a successful login. |

@@ -33,9 +33,10 @@ Requirements: Node.js ≥ 24, npm ≥ 11, Windows/macOS/Linux.
 git clone https://github.com/mohamedwaseemgitx7-dotcom/dmonitz.git
 cd dmonitz
 npm ci
-npm run build
-npm start                     # http://127.0.0.1:4600
+npm start                     # builds, then serves http://127.0.0.1:4600
 ```
+
+On Windows you can instead double-click **`Start-SentinelOps.cmd`** — it installs dependencies on first run, builds, starts the server and opens the browser. (`npm run start:fast` skips the build when nothing changed.)
 
 On first start the server prints a **one-time setup token** (also written to `data/setup-token.txt`). Open the app, paste the token, and create the administrator account with your own password. The token file is deleted once the account exists. There are no default credentials.
 
@@ -51,7 +52,7 @@ npm run desktop:build
 
 Produces in `apps/desktop/release/`:
 
-- `SentinelOps-0.1.0-x64-setup.exe` — per-user installer (no administrator rights), Start-menu and desktop shortcuts, normal uninstall via *Settings → Apps*.
+- `SentinelOps-0.1.0-x64-setup.exe` — per-user installer (no administrator rights), Start-menu and desktop shortcuts, normal uninstall via *Settings → Apps*. Silent install to a chosen folder: `SentinelOps-0.1.0-x64-setup.exe /S /D=D:\SentinelOps`.
 - `SentinelOps-0.1.0-portable.exe` — run without installing.
 
 The binaries are **not code-signed** (no certificate in a ₹0 budget), so Windows SmartScreen may warn on first launch: choose *More info → Run anyway* only if you built the file yourself or verified its SHA-256 against [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md). Data lives in `%APPDATA%\SentinelOps\data`; uninstalling keeps it unless you delete that folder.
