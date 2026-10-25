@@ -12,6 +12,10 @@ SentinelOps analyses GitHub repositories and local working copies, diagnoses fai
 | Auth | First-run setup token → admin account; scrypt passwords; HttpOnly SameSite=Strict sessions; CSRF; roles (admin / read-only viewer); **at most 3 accounts** (invitations reserve a seat) |
 | Cost | ₹0 — runs locally; no paid services required |
 
+## Download
+
+**Just want the Windows app?** Follow **[DOWNLOAD.md](DOWNLOAD.md)** — download the installer from [Releases](https://github.com/mohamedwaseemgitx7-dotcom/dmonitz/releases), verify its SHA-256, install, done. No Node.js needed.
+
 ## Features
 
 - **Repository Manager** — GitHub or local folder; languages, frameworks, components, manifests, Docker/Terraform/Kubernetes, docs gaps; tabs for overview, architecture, dependencies, pipelines, security, PR gatekeeper, deployments, incidents, analytics, documentation.
