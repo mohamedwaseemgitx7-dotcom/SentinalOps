@@ -11,7 +11,9 @@
 | Access control tests | ✅ | `app.test.ts` |
 | Desktop exe launches | ✅ dev, packaged, portable, and installed copy (`D:\SentinelOps`) | `artifacts/screenshots/desktop-*.png` |
 | Defender scan of binaries | ✅ no threats | MpCmdRun |
-| Code signing | ❌ not signed (no certificate; ₹0) | documented |
+| Code signing | ❌ not signed — Artifact Signing unavailable to individuals in India; OV certificate is paid; ₹0 route is the Microsoft Store (MSIX, signed by Microsoft) | BUILD_WINDOWS.md |
+| Windows block investigation | ✅ no Defender/SmartScreen/SAC/CFA/Code Integrity block on this PC; SmartScreen will warn on downloaded copies | BUILD_WINDOWS.md |
+| Store package builds | ✅ AppX manifest verified (placeholder identity, test package deleted) | BUILD_WINDOWS.md |
 | LICENSE | ✅ MIT | `LICENSE` |
 | Cloud deployment | ⛔ owner chose local-first | DECISIONS.md ADR-009 |
 | CI on GitHub | ✅ all 4 jobs green (run 40125080435) | build/test, e2e, gitleaks (full history), container build + smoke |
@@ -21,8 +23,8 @@
 
 | File | Size | SHA-256 |
 |---|---:|---|
-| `SentinelOps-0.1.0-x64-setup.exe` | 121,178,183 B | `7647741B7DF26F576FD7CD8D5D295828554C0B76199D9E8C6694AD946DE99A15` |
-| `SentinelOps-0.1.0-portable.exe` | 120,934,234 B | `6FB9C00F95D5A525265F4F9E062CFDE0E9B4B08CF3B9B06FA4BEE74468EE2EF1` |
+| `SentinelOps-0.2.0-x64-setup.exe` | 121,189,057 B | `DFC568338039CB3FAB89D250F1C3957528EE3CB04673E54388FE66CAD2C81A1A` |
+| `SentinelOps-0.2.0-portable.exe` | 120,944,994 B | `243275A9A538A0F999B94FB150F9203A61D94CD019FD48FF0B1C44E7A264D388` |
 
 Verify: `Get-FileHash .\SentinelOps-0.1.0-x64-setup.exe -Algorithm SHA256`.
 

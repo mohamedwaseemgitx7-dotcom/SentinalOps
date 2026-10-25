@@ -12,6 +12,8 @@
 - Project skills: find-skills, dispatching-parallel-agents, reverse-engineer-anything, improve-codebase-architecture.
 
 ### Fixed
+- Desktop data folder was `%APPDATA%\@sentinelops\desktop` (missing `productName`); now `%APPDATA%\SentinelOps` with one-time migration.
+- Executable metadata now names the publisher (Mohamed Waseem).
 - `npm start` on a fresh checkout (builds first); added `Start-SentinelOps.cmd`.
 - Notification test reported "pending" because concurrent drains returned early.
 - Gitleaks used the deprecated `detect` command; Trivy failed when `~/.docker` referenced a missing credential helper.

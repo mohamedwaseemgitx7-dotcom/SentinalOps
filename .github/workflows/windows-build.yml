@@ -1,0 +1,75 @@
+name: Windows build
+
+# Builds the Windows installer and portable exe on a clean GitHub-hosted runner.
+# Signs ONLY when a real code-signing certificate is provided as repository secrets;
+# otherwise the binaries are built unsigned and the job summary says so.
+# Artifacts are uploaded to the run; nothing is published as a GitHub Release automatically.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      npm_config_cache: ~/.npm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      - name: Decide signing mode
+        id: signing
+        shell: pwsh
+        env:
+          HAS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+        run: |
+          if ($env:HAS_CERT -eq 'true') { "mode=signed" >> $env:GITHUB_OUTPUT } else { "mode=unsigned" >> $env:GITHUB_OUTPUT }
+
+      - name: Build (unsigned)
+        if: steps.signing.outputs.mode == 'unsigned'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run desktop:build
+
+      - name: Build (signed with repository certificate)
+        if: steps.signing.outputs.mode == 'signed'
+        env:
+          # electron-builder reads these; the certificate never touches the repository.
+          CSC_LINK: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: npm run desktop:build
+
+      - name: Checksums and signature report
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem apps/desktop/release -Filter *.exe
+          $lines = foreach ($f in $files) { "{0}  {1}" -f (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower(), $f.Name }
+          $lines | Set-Content -Encoding ascii apps/desktop/release/SHA256SUMS.txt
+          "## Windows build (${{ steps.signing.outputs.mode }})" >> $env:GITHUB_STEP_SUMMARY
+          "| File | Signature | SHA-256 |" >> $env:GITHUB_STEP_SUMMARY
+          "|---|---|---|" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            "| $($f.Name) | $($sig.Status) | ``$((Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower())`` |" >> $env:GITHUB_STEP_SUMMARY
+            if ('${{ steps.signing.outputs.mode }}' -eq 'signed' -and $sig.Status -ne 'Valid') { throw "$($f.Name) signature is $($sig.Status)" }
+          }
+          if ('${{ steps.signing.outputs.mode }}' -eq 'unsigned') { "> Unsigned build: Windows SmartScreen will warn users who download it. See BUILD_WINDOWS.md." >> $env:GITHUB_STEP_SUMMARY }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sentinelops-windows-${{ github.ref_name }}-${{ steps.signing.outputs.mode }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/SHA256SUMS.txt
+          retention-days: 14

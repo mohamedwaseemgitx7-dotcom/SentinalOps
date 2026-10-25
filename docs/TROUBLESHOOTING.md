@@ -15,7 +15,8 @@
 | Remote load test refused | Target is not a configured monitor or ownership not confirmed | Add it as a monitor first; tick the ownership confirmation; caps are 25 VUs / 60 s. |
 | Monitor shows 503 but the site works in a browser | Health endpoint reports a dependency (e.g. DB) not ready, or a free-tier host is waking up | Check the service's own logs; SentinelOps reports what it observed, not the internal cause. |
 | Desktop app shows "could not start its local server" | Data folder not writable or database locked by another instance | Close other instances; check `%APPDATA%\SentinelOps\data`. |
-| SmartScreen warning on the .exe | Binary is unsigned | Verify the SHA-256 in RELEASE-CHECKLIST.md, then *More info → Run anyway*. |
+| SmartScreen "Windows protected your PC" on the .exe | Downloaded copy (Mark of the Web) of an unsigned binary | Verify the SHA-256 in RELEASE-CHECKLIST.md, then *More info → Run anyway*. Do not disable SmartScreen. Long-term fix: Microsoft Store or a CA certificate — see BUILD_WINDOWS.md. |
+| Desktop data seems missing after upgrading from 0.1.0 | 0.1.0 stored data in `%APPDATA%\@sentinelops\desktop\data` | 0.2.0 copies it to `%APPDATA%\SentinelOps\data` automatically on first start (original kept). |
 | `npm ci` very slow / C: filling up | npm cache on C: | `.npmrc` already points the cache to `D:\dmonitz\.cache\npm`; keep it. |
 | Electron build downloads to C: | Cache env not set | Export `electron_config_cache` and `ELECTRON_BUILDER_CACHE` to `D:\dmonitz\.cache\...` first. |
 | Server crashes on start with "erasableSyntaxOnly" style errors | Non-erasable TypeScript (enum / parameter properties) | Rewrite as plain fields; Node 24 runs `.ts` by stripping types only. |

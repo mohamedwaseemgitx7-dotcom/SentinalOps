@@ -1,25 +1,30 @@
 {
   "name": "@sentinelops/desktop",
+  "productName": "SentinelOps",
   "version": "0.2.0",
   "private": true,
-  "description": "SentinelOps desktop app for Windows",
-  "author": "SentinelOps",
+  "description": "SentinelOps — local-first DevOps monitoring and security dashboard",
+  "author": {
+    "name": "Mohamed Waseem"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/mohamedwaseemgitx7-dotcom/dmonitz",
   "main": "dist/main.cjs",
   "scripts": {
     "build": "node scripts/bundle.mjs",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder --win --x64 --publish never"
+    "dist": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:store": "npm run build && electron-builder --win appx --x64 --publish never --config electron-builder.store.cjs"
   },
   "devDependencies": {
     "electron": "44.9.3",
     "electron-builder": "26.17.0",
     "esbuild": "0.28.2"
   },
-  "homepage": "https://github.com/mohamedwaseemgitx7-dotcom/dmonitz",
   "build": {
     "appId": "dev.sentinelops.desktop",
     "productName": "SentinelOps",
-    "copyright": "Copyright © 2026 SentinelOps",
+    "copyright": "Copyright © 2026 Mohamed Waseem",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -46,7 +51,8 @@
       ],
       "icon": "build/icon.png",
       "artifactName": "${productName}-${version}-${arch}-setup.${ext}",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "legalTrademarks": "SentinelOps"
     },
     "nsis": {
       "oneClick": false,
@@ -61,6 +67,5 @@
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"
     }
-  },
-  "license": "MIT"
+  }
 }
