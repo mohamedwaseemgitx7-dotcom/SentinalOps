@@ -22,13 +22,14 @@
 | Heap out of memory | out-of-memory | ✅ |
 | `Resource not accessible by integration` | auth-permission | ✅ |
 | Python `ModuleNotFoundError` | dependency-install with module name | ✅ |
+| Monitor deleted while its check is in flight; id reused | stale result discarded | ❌ found by CI (stale write into new monitor) → fixed → ✅ |
 | **Real** keep-alive job: `curl … returned error: 502` | network (upstream 5xx, not repo code) | ❌ first classified as build-error → rule added → ✅ |
 | Unknown failure | low confidence, no guess | ✅ |
 | Monitored service returns 503 | incident after threshold; manual resolve refused; auto-resolve on recovery | ✅ |
 
 ## Results (2026-10-25)
 
-- `npm test`: **52 passed**.
+- `npm test`: **53 passed** (locally ×3 and on GitHub CI).
 - `npx playwright test`: **7 passed**, 3 skipped by design (desktop-only steps).
 - Desktop: dev, packaged and portable builds launched and rendered (screenshots in `artifacts/screenshots`).
 

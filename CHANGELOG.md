@@ -23,3 +23,5 @@ First working release (local-first).
 - Load tests could exhaust the UI's rate limit; worker thread never exited.
 - Secret scanner false positives (key header without key body; plain words as passwords); OSV 400 on npm workspaces.
 - Modal focus loss; unlabeled account button on mobile.
+- Stale monitor check written into a new monitor that reused a deleted monitor's id (found by CI).
+- CI: gitleaks action failed on the root commit (replaced by checksum-verified binary); npm cache path.

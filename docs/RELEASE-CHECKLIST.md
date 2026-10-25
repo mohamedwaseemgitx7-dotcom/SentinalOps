@@ -3,7 +3,7 @@
 | Gate | Status | Evidence |
 |---|---|---|
 | Typecheck (server + web) | ✅ | `npm run typecheck` |
-| Unit/API/security tests | ✅ 52 passed | `npm test` |
+| Unit/API/security tests | ✅ 53 passed | `npm test` |
 | E2E desktop + mobile | ✅ 7 passed (3 skipped by design) | `npx playwright test` |
 | `npm audit --audit-level=high` | ✅ 0 vulnerabilities | 2026-10-25 |
 | Secret scan of this repository | ✅ no secrets (self-analysis; gitleaks in CI) | SentinelOps self-analysis |
@@ -14,7 +14,8 @@
 | Code signing | ❌ not signed (no certificate; ₹0) | documented |
 | LICENSE | ✅ MIT | `LICENSE` |
 | Cloud deployment | ⛔ owner chose local-first | DECISIONS.md ADR-009 |
-| CI on GitHub | ⏳ runs after the repository is published | `.github/workflows/ci.yml` |
+| CI on GitHub | ✅ all 4 jobs green (run 40125080435) | build/test, e2e, gitleaks (full history), container build + smoke |
+| Branch protection | ✅ `main` requires the 4 CI checks; no force-push/deletion | GitHub settings |
 
 ## Artifacts (built 2026-10-25, unsigned)
 
