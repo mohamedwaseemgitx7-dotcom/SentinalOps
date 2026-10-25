@@ -18,7 +18,7 @@
 
 ## Pending owner decisions
 
-Decided 2026-10-25: **public** GitHub repository `dmonitz`, **MIT** license, **stay local** (no cloud hosting).
+Decided 2026-10-25: GitHub repository `dmonitz` (MIT), **switched to private** later the same day; **stay local** (no cloud hosting). Release **v0.2.0** (installer, portable, SHA256SUMS) published on GitHub Releases — visible only to the owner and invited collaborators. While private on the free plan, branch protection and GitHub secret scanning are unavailable (CI gitleaks still runs). Sharing options and switching visibility: `DOWNLOAD.md`.
 
 Remaining: create your own administrator account (the QA account used for testing lived in a throwaway data folder).
 
