@@ -12,8 +12,21 @@ let origin = '';
 let dataDir = '';
 let closeServer: (() => Promise<void>) | null = null;
 
+/**
+ * v0.1 packaged builds lacked `productName`, so Electron stored data under
+ * %APPDATA%\@sentinelops\desktop. Copy it once to %APPDATA%\SentinelOps (the original is kept).
+ */
+function migrateLegacyData(target: string): void {
+  const legacy = path.join(app.getPath('appData'), '@sentinelops', 'desktop', 'data');
+  if (fs.existsSync(target) || !fs.existsSync(legacy)) return;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.cpSync(legacy, target, { recursive: true });
+  console.log(`SentinelOps desktop: migrated data from ${legacy}`);
+}
+
 async function startServer(): Promise<string> {
   dataDir = process.env.SENTINELOPS_DATA_DIR ?? path.join(app.getPath('userData'), 'data');
+  if (!process.env.SENTINELOPS_DATA_DIR) migrateLegacyData(dataDir);
   const { buildApp, loadConfig } = (await import(pathToFileURL(path.join(distDir, 'server.mjs')).href)) as typeof import('../../server/src/embedded.ts');
   const config = loadConfig({
     host: '127.0.0.1',

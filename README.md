@@ -59,7 +59,7 @@ Produces in `apps/desktop/release/`:
 - `SentinelOps-0.1.0-x64-setup.exe` — per-user installer (no administrator rights), Start-menu and desktop shortcuts, normal uninstall via *Settings → Apps*. Silent install to a chosen folder: `SentinelOps-0.1.0-x64-setup.exe /S /D=D:\SentinelOps`.
 - `SentinelOps-0.1.0-portable.exe` — run without installing.
 
-The binaries are **not code-signed** (no certificate in a ₹0 budget), so Windows SmartScreen may warn on first launch: choose *More info → Run anyway* only if you built the file yourself or verified its SHA-256 against [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md). Data lives in `%APPDATA%\SentinelOps\data`; uninstalling keeps it unless you delete that folder.
+The binaries are **not code-signed**. Run locally they start normally; a **downloaded** copy triggers SmartScreen ("Windows protected your PC"). Verify the SHA-256 against [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) before choosing *Run anyway*. The ₹0 way to remove the warning is publishing through the Microsoft Store — see [BUILD_WINDOWS.md](BUILD_WINDOWS.md). Data lives in `%APPDATA%\SentinelOps\data`; uninstalling keeps it unless you delete that folder.
 
 ## Testing
 
