@@ -22,8 +22,8 @@
     "start:fast": "npm run start -w @sentinelops/server"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.0",
-    "concurrently": "10.0.6"
+    "@playwright/test": "1.65.0",
+    "concurrently": "10.0.7"
   },
   "license": "MIT"
 }
